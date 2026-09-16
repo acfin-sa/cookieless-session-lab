@@ -4,6 +4,7 @@ let pageConfig = null;
 let applicationTokens = null;
 let connectedIframes = new WeakSet();
 let listenerBound = false;
+let rawIframe = null;
 
 function lookerOrigin() {
   return new URL(pageConfig.lookerEmbedHost).origin;
@@ -23,8 +24,19 @@ function cookielessLoginUrl(authenticationToken, navigationToken, dashboardId) {
   return `${lookerOrigin()}/login/embed/${targetUri}?embed_authentication_token=${authenticationToken}`;
 }
 
+function reportRawEvent(event) {
+  return reportEvent({
+    ...event,
+    embed_client: "postmessage",
+  });
+}
+
+function isRawIframeMessage(event) {
+  return Boolean(rawIframe) && event.source === rawIframe.contentWindow;
+}
+
 function parseMessage(event) {
-  if (event.origin !== lookerOrigin()) {
+  if (!isRawIframeMessage(event) || event.origin !== lookerOrigin()) {
     return null;
   }
   let data = event.data;
@@ -62,11 +74,11 @@ async function onMessage(event) {
     return;
   }
   if (data.type === "session:status" && data.expired) {
-    await reportEvent({
+    await reportRawEvent({
       method: "session:status",
       actor: "iframe postMessage",
       summary: "iframe session:status expired=true — embed cannot keep working; session_reference not revoked. Nav/api JWT clocks are unchanged.",
-      tokens_in: ["iframe_session"],
+      tokens_in: ["iframe_session_postmessage"],
       tokens_out: [],
       ok: false,
       expired: true,
@@ -76,7 +88,7 @@ async function onMessage(event) {
   if (data.type !== "session:tokens:request") {
     return;
   }
-  await reportEvent({
+  await reportRawEvent({
     method: "postMessage session:tokens:request",
     actor: "iframe postMessage",
     summary: "Looker iframe asked the host for tokens",
@@ -87,7 +99,7 @@ async function onMessage(event) {
   if (!connectedIframes.has(iframeWindow) && applicationTokens) {
     connectedIframes.add(iframeWindow);
     sendTokens(iframeWindow, applicationTokens);
-    await reportEvent({
+    await reportRawEvent({
       method: "postMessage session:tokens",
       actor: "Browser",
       summary: "first reply reused acquire tokens (no generate_tokens yet)",
@@ -103,7 +115,7 @@ async function onMessage(event) {
     });
     applicationTokens = { ...applicationTokens, ...tokens };
     sendTokens(iframeWindow, applicationTokens);
-    await reportEvent({
+    await reportRawEvent({
       method: "postMessage session:tokens",
       actor: "Browser",
       summary: tokens.frozen
@@ -117,7 +129,7 @@ async function onMessage(event) {
       JSON.stringify({ type: "session:tokens", session_reference_token_ttl: 0 }),
       lookerOrigin()
     );
-    await reportEvent({
+    await reportRawEvent({
       method: "postMessage session:tokens",
       actor: "Browser",
       summary: `generate failed; sent ttl=0 so the iframe can expire. ${error.message}`,
@@ -137,9 +149,10 @@ function bindListener() {
 
 function createIframe(container, url) {
   const iframe = document.createElement("iframe");
-  iframe.src = url;
   iframe.setAttribute("allowfullscreen", "true");
   iframe.setAttribute("title", "Looker cookieless embed");
+  rawIframe = iframe;
+  iframe.src = url;
   container.appendChild(iframe);
   return iframe;
 }
@@ -155,25 +168,26 @@ async function acquireAndMount(container) {
     tokens.navigation_token,
     pageConfig.lookerDashboardId
   );
-  await reportEvent({
+  createIframe(container, url);
+  await reportRawEvent({
     method: "iframe navigation to embed login URL",
     actor: "Browser",
     summary: "raw postMessage tab set iframe src to /login/embed with embed_authentication_token",
     tokens_in: ["authentication_token", "navigation_token"],
     tokens_out: [],
   });
-  createIframe(container, url);
 }
 
 export async function startPostMessageTab(config) {
   pageConfig = config;
-  bindListener();
   document.getElementById("postmessage-root").innerHTML = "";
+  rawIframe = null;
   if (!config.lookerDashboardId || !config.lookerEmbedHost) {
     document.getElementById("postmessage-root").textContent =
       "Set LOOKER_EMBED_HOST and LOOKER_EMBED_DASHBOARD_ID in .env";
     return;
   }
+  bindListener();
   await acquireAndMount(document.getElementById("postmessage-root"));
 }
 
@@ -184,5 +198,6 @@ export function stopPostMessageTab() {
   }
   applicationTokens = null;
   connectedIframes = new WeakSet();
+  rawIframe = null;
   document.getElementById("postmessage-root").innerHTML = "";
 }

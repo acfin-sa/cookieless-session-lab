@@ -15,6 +15,7 @@
         </div>
         <nav>
             <a class="btn" href="/architecture">Architecture</a>
+            <a class="btn" href="/sequence">Sequence</a>
             <a class="btn danger" href="/logout">Log out</a>
         </nav>
     </header>
@@ -32,7 +33,8 @@
         <button type="button" title="POST /api/looker/end-embed-session" id="btn-end-looker">End Looker session</button>
     </section>
 
-    <div class="lab-grid">
+    <div class="lab-split">
+        <div class="lab-grid">
         <div class="observatory">
             <section>
                 <h2>1. Lifetime swimlane</h2>
@@ -53,24 +55,10 @@
                 <div id="token-cards" class="token-grid"></div>
             </section>
 
-            <section class="sequence-row">
-                <div>
-                    <h2>3. Sequence (static happy path)</h2>
-                    <div id="mermaid-target" class="mermaid-box"></div>
-                </div>
-                <div>
-                    <h2>Live event log</h2>
-                    <p class="hint">Click a row to highlight the tokens it touched.</p>
-                    <div id="event-log" class="event-log"></div>
-                </div>
-            </section>
-
-            <section>
-                <h2>4. Method catalog</h2>
-                <p class="hint">Generated from <code>docs/token-method-map.json</code>. Renew is not acquire: refresh/generate rotate short-lived tokens; <code>session_reference_token_ttl == 0</code> means acquire again.</p>
-                <div class="table-wrap">
-                    <table id="method-catalog"></table>
-                </div>
+            <section class="event-log-section">
+                <h2>3. Live event log</h2>
+                <p class="hint">Click a row to highlight the tokens it touched.</p>
+                <div id="event-log" class="event-log"></div>
             </section>
         </div>
 
@@ -96,11 +84,21 @@
                 <div class="countdown-overlay hidden" id="overlay-pm"></div>
             </div>
         </aside>
+        </div>
+
+        <div class="resize-handle resize-handle-row" id="lab-height-handle" role="separator" aria-orientation="horizontal" aria-label="Drag to resize the method catalog"></div>
+
+        <section class="method-catalog-pane">
+        <h2>4. Method catalog</h2>
+        <p class="hint">Generated from <code>docs/token-method-map.json</code>. Renew is not acquire: refresh/generate rotate short-lived tokens; <code>session_reference_token_ttl == 0</code> means acquire again.</p>
+        <div class="table-wrap">
+            <table id="method-catalog"></table>
+        </div>
+        </section>
     </div>
 
     <script id="page-config" type="application/json">{{ page_config | tojson }}</script>
     <script id="method-map" type="application/json">{{ method_map | tojson }}</script>
-    <script id="mermaid-source" type="application/json">{{ mermaid_source | tojson }}</script>
     <script type="module" src="/static/js/dist/lab.js"></script>
 </body>
 </html>

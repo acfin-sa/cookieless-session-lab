@@ -90,6 +90,13 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
   padding: 0;
 }
 .page-architecture .architecture-content strong { font-weight: 650; }
+
+.page-sequence .sequence-content {
+  padding: 1.25rem 1.5rem 3rem;
+}
+.page-sequence .mermaid-box {
+  min-height: 70vh;
+}
 .home-card {
   max-width: 40rem;
   background: var(--panel);
@@ -128,9 +135,11 @@ a.btn { text-decoration: none; display: inline-block; }
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--line);
   align-items: flex-start;
+  flex-shrink: 0;
 }
 .lab-header h1 { margin: 0; font-size: 1.25rem; }
 .lab-header .who { margin: 0.2rem 0 0; }
+.lab-header nav { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 
 .controls {
   display: flex;
@@ -140,19 +149,23 @@ a.btn { text-decoration: none; display: inline-block; }
   border-bottom: 1px solid var(--line);
   align-items: center;
   background: #141a24;
+  flex-shrink: 0;
 }
 .toggle { display: flex; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
 
 .lab-grid {
   display: flex;
-  min-height: calc(100vh - 8rem);
+  height: min(56vh, 640px);
+  min-height: 280px;
 }
 .observatory {
   flex: 0 0 50%;
   min-width: 0;
+  min-height: 0;
   overflow: auto;
-  padding: 1rem 1.25rem 3rem;
-  max-height: calc(100vh - 8rem);
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
 }
 .resize-handle {
   flex: 0 0 5px;
@@ -165,13 +178,22 @@ a.btn { text-decoration: none; display: inline-block; }
 .resize-handle.dragging {
   background: var(--accent);
 }
-.observatory h2 { font-size: 1rem; margin: 1.25rem 0 0.4rem; }
+.resize-handle-row {
+  cursor: row-resize;
+  width: 100%;
+  height: 5px;
+  flex: none;
+}
+.observatory h2,
+.method-catalog-pane h2 { font-size: 1rem; margin: 1.25rem 0 0.4rem; }
+.method-catalog-pane h2 { margin-top: 0; }
 .iframe-pane {
   flex: 1 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  height: 100%;
   background: #0c1016;
 }
 .tab-bar { display: flex; gap: 0.25rem; padding: 0.6rem 0.8rem 0; }
@@ -182,16 +204,16 @@ a.btn { text-decoration: none; display: inline-block; }
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 420px;
+  min-height: 0;
 }
 .embed-slot {
   flex: 1;
-  min-height: 280px;
+  min-height: 0;
 }
 .embed-slot iframe {
   width: 100%;
   height: 100%;
-  min-height: 280px;
+  min-height: 0;
   border: 0;
   background: #fff;
 }
@@ -334,10 +356,11 @@ a.btn { text-decoration: none; display: inline-block; }
   pointer-events: none;
 }
 
-.sequence-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+.event-log-section {
+  flex: 1 1 auto;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
 }
 .mermaid-box {
   background: #f4f1ea;
@@ -348,10 +371,15 @@ a.btn { text-decoration: none; display: inline-block; }
   min-height: 240px;
 }
 .event-log {
-  max-height: 420px;
+  flex: 1 1 auto;
+  min-height: 280px;
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+.method-catalog-pane {
+  width: 100%;
+  padding: 1rem 1.25rem 3rem;
 }
 .event-row {
   padding: 0.45rem 0.6rem;
@@ -368,13 +396,36 @@ a.btn { text-decoration: none; display: inline-block; }
 table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
 th, td { border-bottom: 1px solid var(--line); text-align: left; padding: 0.4rem; vertical-align: top; }
 th { color: var(--muted); font-weight: 600; }
+#method-catalog .catalog-group-row th {
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: none;
+  padding: 0.65rem 0.5rem 0.45rem;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--accent);
+  border-left: 3px solid var(--accent);
+}
+#method-catalog tbody .catalog-group-row:first-child th {
+  border-top: none;
+}
 
 @media (max-width: 1100px) {
-  .lab-grid { flex-direction: column; }
+  .lab-grid {
+    flex-direction: column;
+    height: auto !important;
+    min-height: 0;
+    border-bottom: 1px solid var(--line);
+  }
   .resize-handle { display: none; }
-  .observatory { flex-basis: auto !important; max-height: none; }
-  .sequence-row { grid-template-columns: 1fr; }
+  .observatory { flex-basis: auto !important; max-height: 70vh; }
   .token-grid { grid-template-columns: 1fr; }
   .layer-b-row { grid-template-columns: 1fr; }
-  .iframe-pane { min-height: 50vh; border-top: 1px solid var(--line); }
+  .iframe-pane {
+    height: 45vh;
+    min-height: 280px;
+    border-top: 1px solid var(--line);
+  }
 }

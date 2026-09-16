@@ -5,8 +5,8 @@
   "description": "Pedagogical test bench for nested Auth0 + Looker cookieless sessions",
   "scripts": {
     "postinstall": "node scripts/ensure-venv.mjs",
-    "build:js": "esbuild app/static/js/src/lab.js --bundle --format=esm --platform=browser --outfile=app/static/js/dist/lab.js --sourcemap",
-    "watch:js": "esbuild app/static/js/src/lab.js --bundle --format=esm --platform=browser --outfile=app/static/js/dist/lab.js --sourcemap --watch",
+    "build:js": "esbuild app/static/js/src/lab.js app/static/js/src/sequence.js --bundle --format=esm --platform=browser --outdir=app/static/js/dist --sourcemap",
+    "watch:js": "esbuild app/static/js/src/lab.js app/static/js/src/sequence.js --bundle --format=esm --platform=browser --outdir=app/static/js/dist --sourcemap --watch",
     "dev": "node scripts/dev.mjs"
   },
   "dependencies": {

@@ -152,8 +152,6 @@ def acquire_embed_session(session: HostSession, user_agent: str) -> dict[str, An
     session.looker_api_token_expires_at = _ttl_expires(response.api_token_ttl)
     session.session_reference_dropped = False
     session.looker_session_revoked = False
-    session.looker_iframe_session_expired = False
-    session.looker_iframe_session_expired_at = None
     session.record_refresh_marker("Looker acquire")
 
     browser_payload = {
@@ -279,8 +277,6 @@ def generate_embed_tokens(session: HostSession, user_agent: str) -> dict[str, An
     session.looker_api_token = response.api_token
     session.looker_api_token_issued_at = now
     session.looker_api_token_expires_at = _ttl_expires(response.api_token_ttl)
-    session.looker_iframe_session_expired = False
-    session.looker_iframe_session_expired_at = None
     session.record_refresh_marker("Looker generate_tokens")
 
     browser_payload = {
@@ -358,8 +354,7 @@ def end_embed_session(session: HostSession, user_agent: str) -> None:
             status_code=status,
         )
     session.looker_session_revoked = True
-    session.looker_iframe_session_expired = False
-    session.looker_iframe_session_expired_at = None
+    session.reset_iframe_clients()
     clear_looker_tokens(session)
 
 

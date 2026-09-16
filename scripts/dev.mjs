@@ -24,14 +24,17 @@ if (!existsSync(envFile)) {
   );
 }
 
-spawnSync(esbuildBin, [
+const esbuildArgs = [
   "app/static/js/src/lab.js",
+  "app/static/js/src/sequence.js",
   "--bundle",
   "--format=esm",
   "--platform=browser",
-  "--outfile=app/static/js/dist/lab.js",
+  "--outdir=app/static/js/dist",
   "--sourcemap",
-], {
+];
+
+spawnSync(esbuildBin, esbuildArgs, {
   cwd: root,
   stdio: "inherit",
 });
@@ -59,15 +62,7 @@ function start(label, command, args) {
   children.push(child);
 }
 
-start("js", esbuildBin, [
-  "app/static/js/src/lab.js",
-  "--bundle",
-  "--format=esm",
-  "--platform=browser",
-  "--outfile=app/static/js/dist/lab.js",
-  "--sourcemap",
-  "--watch",
-]);
+start("js", esbuildBin, [...esbuildArgs, "--watch"]);
 
 start("py", venvPython, [
   "-m",

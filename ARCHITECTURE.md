@@ -59,7 +59,7 @@ After login or refresh, the lab stores Auth0 tokens on `HostSession` and shows `
 | Setting | Where | Role |
 | --- | --- | --- |
 | `HOST_ACCESS_TOKEN_TTL_SECONDS` | `app/config.py` (default **200** s) | `host_access_token` JWT lifetime |
-| `LOOKER_EMBED_SESSION_LENGTH` | `.env` (default **3600** s) | Looker `session_length` at acquire |
+| `LOOKER_EMBED_SESSION_LENGTH` | `.env` (default **720** s) | Looker `session_length` at acquire |
 | `HOST_SESSION_COOKIE_MAX_AGE` | `app/services/deps.py` (12 h) | How long the opaque `host_session_id` cookie lasts |
 
 Looker `navigation_token` / `api_token` TTLs (~10 min) and `authentication_token` (~30 s) come back from Looker on acquire/generate; they are not env vars here. Those two short-lived tokens are **not the same JWT** and are **not** the embed session itself — see below.

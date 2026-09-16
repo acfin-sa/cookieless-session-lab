@@ -36,7 +36,7 @@ def _architecture_markdown_source() -> str:
         f"| `HOST_ACCESS_TOKEN_TTL_SECONDS` | `app/config.py` (**{HOST_ACCESS_TOKEN_TTL_SECONDS}** s) |",
     )
     source = source.replace(
-        "| `LOOKER_EMBED_SESSION_LENGTH` | `.env` (default **3600** s) |",
+        "| `LOOKER_EMBED_SESSION_LENGTH` | `.env` (default **720** s) |",
         f"| `LOOKER_EMBED_SESSION_LENGTH` | `.env` (**{LOOKER_EMBED_SESSION_LENGTH}** s) |",
     )
     source = source.replace(
@@ -95,15 +95,29 @@ async def lab(request: Request):
     session = session_from_cookie(request)
     if session is None or session.host_revoked:
         return RedirectResponse(url=public_url("/"), status_code=302)
-    mermaid_source = SEQUENCE_DIAGRAM_PATH.read_text(encoding="utf-8")
     return templates.TemplateResponse(
         request=request,
         name="lab.html",
         context={
             "page_config": _page_config(),
             "method_map": load_method_map(),
-            "mermaid_source": mermaid_source,
             "user_name": session.display_name(),
             "user_email": session.email(),
+        },
+    )
+
+
+@views_router.get("/sequence", response_class=HTMLResponse)
+async def sequence(request: Request):
+    session = session_from_cookie(request)
+    mermaid_source = SEQUENCE_DIAGRAM_PATH.read_text(encoding="utf-8")
+    return templates.TemplateResponse(
+        request=request,
+        name="sequence.html",
+        context={
+            "mermaid_source": mermaid_source,
+            "logged_in": session is not None and not session.host_revoked,
+            "user_name": session.display_name() if session else None,
+            "user_email": session.email() if session else None,
         },
     )

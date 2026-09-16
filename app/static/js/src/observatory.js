@@ -108,10 +108,10 @@ function layerBStatusHtml(iframeSession) {
     ? `<p class="state-reason">${escapeHtml(iframeSession.state_reason)}</p>`
     : "";
   return `
-    <article class="token-card layer-b-cell state-${iframeState}" data-token="iframe_session">
+    <article class="token-card layer-b-cell state-${iframeState}" data-token="${escapeHtml(iframeSession.id)}">
         <header>
           <span class="layer">Looker</span>
-          <h3>iframe session</h3>
+          <h3>${escapeHtml(iframeSession.name)}</h3>
         </header>
         <div class="storage">${escapeHtml(iframeSession?.purpose || "session-level signal.")}</div>
         <div class="state"><span>${escapeHtml(iframeLabel)}</span></div>
@@ -163,8 +163,9 @@ function renderCards(root) {
     `;
     root.appendChild(card);
   }
-  if (snapshot.iframe_session) {
-    root.insertAdjacentHTML("beforeend", layerBStatusHtml(snapshot.iframe_session));
+  const iframeSessions = snapshot.iframe_sessions || [];
+  for (const iframeSession of iframeSessions) {
+    root.insertAdjacentHTML("beforeend", layerBStatusHtml(iframeSession));
   }
   applyTokenHighlights();
 }
@@ -181,9 +182,12 @@ function ganttRows() {
   const rows = [];
   for (const token of snapshot.tokens) {
     rows.push(token);
-    if (token.id === "session_reference_token" && snapshot.iframe_session) {
-      rows.push(snapshot.iframe_session);
-    }
+  }
+  for (const iframeSession of snapshot.iframe_sessions || []) {
+    rows.push(iframeSession);
+  }
+  if (snapshot.iframe_session && !(snapshot.iframe_sessions || []).length) {
+    rows.push(snapshot.iframe_session);
   }
   return rows;
 }
@@ -196,7 +200,7 @@ function renderGantt(root) {
   const now = Date.now();
   const horizon = Math.max(now - t0 + 60_000, 12 * 60_000);
   const rowHeight = 28;
-  const left = 168;
+  const left = 196;
   const width = 720;
   const rows = ganttRows();
   const height = 40 + rows.length * rowHeight;
@@ -206,7 +210,7 @@ function renderGantt(root) {
   rows.forEach((token, index) => {
     const y = 24 + index * rowHeight;
     const issued = token.issued_at ? Date.parse(token.issued_at) : t0;
-    const openEnded = token.id === "iframe_session" && !token.expires_at && token.state === "alive";
+    const openEnded = String(token.id || "").startsWith("iframe_session") && !token.expires_at && token.state === "alive";
     const expires = token.expires_at ? Date.parse(token.expires_at) : (openEnded ? now : now + 60_000);
     const x1 = x(issued);
     const x2 = Math.max(x1 + 4, x(Math.min(expires, t0 + horizon)));
@@ -219,7 +223,7 @@ function renderGantt(root) {
       revoked: "#c45c5c",
       unborn: "#5b6578",
     }[state];
-    parts.push(`<text x="8" y="${y + 12}" fill="#8b97ab" font-size="11">${token.id}</text>`);
+    parts.push(`<text x="8" y="${y + 12}" fill="#8b97ab" font-size="11">${escapeHtml(token.name || token.id)}</text>`);
     if (token.present || token.state !== "unborn") {
       parts.push(`<rect x="${x1}" y="${y}" width="${x2 - x1}" height="14" rx="3" fill="${color}" opacity="0.85"></rect>`);
     }
@@ -282,6 +286,49 @@ function renderEvents(root) {
   }
 }
 
+const CATALOG_COLUMN_COUNT = 6;
+
+// Looker Admin acquire/generate/end are host-only APIs both embed tabs call.
+// Catalog them once under EmbedSDK (the default tab); do not duplicate under Raw iFrame.
+// iframe_embed_login is the shared /login/embed navigation — also listed once under EmbedSDK.
+const CATALOG_GROUPS = [
+  { id: "auth0", label: "Auth0" },
+  { id: "embed-sdk", label: "Embed SDK" },
+  { id: "raw-iframe", label: "Raw iFrame" },
+];
+
+function catalogGroupId(method) {
+  return method.group || method.catalog_group || "";
+}
+
+function joinCatalogList(values) {
+  return (values || []).map((value) => escapeHtml(value)).join(", ");
+}
+
+function appendCatalogGroupHeader(body, label) {
+  const row = document.createElement("tr");
+  row.className = "catalog-group-row";
+  const heading = document.createElement("th");
+  heading.colSpan = CATALOG_COLUMN_COUNT;
+  heading.scope = "colgroup";
+  heading.textContent = label;
+  row.appendChild(heading);
+  body.appendChild(row);
+}
+
+function appendCatalogMethodRow(body, method) {
+  const row = document.createElement("tr");
+  row.innerHTML = `
+      <td>${escapeHtml(method.method)}</td>
+      <td>${escapeHtml(method.kind || "—")}</td>
+      <td>${escapeHtml(method.direction)}</td>
+      <td>${joinCatalogList(method.tokens_in)}</td>
+      <td>${joinCatalogList(method.tokens_out)}</td>
+      <td>${escapeHtml(method.where_after || "")}</td>
+    `;
+  body.appendChild(row);
+}
+
 function renderCatalog(table, map) {
   table.innerHTML = `
     <thead>
@@ -292,24 +339,34 @@ function renderCatalog(table, map) {
         <th>tokens in</th>
         <th>tokens out</th>
         <th>where token lives after</th>
-        <th>failure modes</th>
       </tr>
     </thead>
     <tbody></tbody>
   `;
   const body = table.querySelector("tbody");
-  for (const method of map.methods || []) {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${method.method}</td>
-      <td>${method.kind || "—"}</td>
-      <td>${method.direction}</td>
-      <td>${(method.tokens_in || []).join(", ")}</td>
-      <td>${(method.tokens_out || []).join(", ")}</td>
-      <td>${method.where_after}</td>
-      <td>${(method.failure_modes || []).join(" · ")}</td>
-    `;
-    body.appendChild(row);
+  const methods = map.methods || [];
+  const grouped = new Map(CATALOG_GROUPS.map((group) => [group.id, []]));
+  const ungrouped = [];
+  for (const method of methods) {
+    const groupId = catalogGroupId(method);
+    if (grouped.has(groupId)) {
+      grouped.get(groupId).push(method);
+    } else {
+      ungrouped.push(method);
+    }
+  }
+  for (const group of CATALOG_GROUPS) {
+    const groupMethods = grouped.get(group.id) || [];
+    if (groupMethods.length === 0) {
+      continue;
+    }
+    appendCatalogGroupHeader(body, group.label);
+    for (const method of groupMethods) {
+      appendCatalogMethodRow(body, method);
+    }
+  }
+  for (const method of ungrouped) {
+    appendCatalogMethodRow(body, method);
   }
 }
 
@@ -388,12 +445,4 @@ export function bindObservatory(elements) {
   }, 4000);
 
   return { poll };
-}
-
-export async function renderMermaid(target, source) {
-  const mermaidModule = await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs");
-  const mermaid = mermaidModule.default;
-  mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "strict" });
-  const { svg } = await mermaid.render("happy-path-diagram", source.trim());
-  target.innerHTML = svg;
 }

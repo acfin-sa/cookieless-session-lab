@@ -54,6 +54,7 @@
   "methods": [
     {
       "id": "auth0_authorize",
+      "group": "auth0",
       "kind": "create",
       "method": "Auth0 /authorize",
       "direction": "Browser → Auth0",
@@ -68,6 +69,7 @@
     },
     {
       "id": "auth0_token_code",
+      "group": "auth0",
       "kind": "create",
       "method": "Auth0 /oauth/token (code exchange)",
       "direction": "Host API → Auth0",
@@ -82,6 +84,7 @@
     },
     {
       "id": "auth0_token_refresh",
+      "group": "auth0",
       "kind": "renew",
       "method": "Auth0 /oauth/token (refresh)",
       "direction": "Host API → Auth0",
@@ -95,6 +98,7 @@
     },
     {
       "id": "host_refresh",
+      "group": "auth0",
       "kind": "renew",
       "method": "POST /api/host/refresh",
       "direction": "Browser → Host API",
@@ -108,6 +112,7 @@
     },
     {
       "id": "host_acquire_looker",
+      "group": "embed-sdk",
       "kind": "create",
       "method": "POST /api/looker/acquire-embed-session",
       "direction": "Browser → Host API",
@@ -122,6 +127,7 @@
     },
     {
       "id": "looker_acquire",
+      "group": "embed-sdk",
       "kind": "create",
       "method": "Looker POST /embed/cookieless_session/acquire",
       "direction": "Host API → Looker API",
@@ -136,6 +142,7 @@
     },
     {
       "id": "iframe_embed_login",
+      "group": "embed-sdk",
       "kind": "bootstrap",
       "method": "iframe navigation to embed login URL",
       "direction": "Browser → Looker (iframe)",
@@ -150,6 +157,7 @@
     },
     {
       "id": "postmessage_tokens_request",
+      "group": "raw-iframe",
       "kind": "request",
       "method": "postMessage session:tokens:request",
       "direction": "iframe → Browser",
@@ -163,6 +171,7 @@
     },
     {
       "id": "postmessage_tokens",
+      "group": "raw-iframe",
       "kind": "deliver",
       "method": "postMessage session:tokens",
       "direction": "Browser → iframe",
@@ -176,6 +185,7 @@
     },
     {
       "id": "host_generate",
+      "group": "embed-sdk",
       "kind": "renew",
       "method": "PUT /api/looker/generate-embed-tokens",
       "direction": "Browser → Host API",
@@ -190,6 +200,7 @@
     },
     {
       "id": "looker_generate",
+      "group": "embed-sdk",
       "kind": "renew",
       "method": "Looker PUT /embed/cookieless_session/generate_tokens",
       "direction": "Host API → Looker API",
@@ -204,6 +215,7 @@
     },
     {
       "id": "host_end_embed",
+      "group": "embed-sdk",
       "kind": "end",
       "method": "POST /api/looker/end-embed-session",
       "direction": "Browser → Host API",
@@ -217,6 +229,7 @@
     },
     {
       "id": "logout",
+      "group": "auth0",
       "kind": "end",
       "method": "logout",
       "direction": "Browser → Host API → Auth0",

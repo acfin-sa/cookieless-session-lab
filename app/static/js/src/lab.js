@@ -1,11 +1,13 @@
 import { api, bootstrapHostSession } from "./host-client.js";
-import { bindObservatory, navApiRemaining, renderMermaid } from "./observatory.js";
+import { bindObservatory, navApiRemaining } from "./observatory.js";
 import { startEmbedSdkTab, stopEmbedSdkTab } from "./embed-sdk-tab.js";
 import { startPostMessageTab, stopPostMessageTab } from "./postmessage-tab.js";
 
 const pageConfig = JSON.parse(document.getElementById("page-config").textContent);
 const SPLIT_STORAGE_KEY = "lab-observatory-width";
+const HEIGHT_STORAGE_KEY = "lab-split-height";
 let activeTab = "sdk";
+let runningTab = null;
 
 function requireElement(id) {
   const element = document.getElementById(id);
@@ -68,6 +70,46 @@ function bindSplitPanel() {
   });
 }
 
+function bindHeightSplit() {
+  const grid = document.querySelector(".lab-grid");
+  const handle = requireElement("lab-height-handle");
+  const savedHeight = localStorage.getItem(HEIGHT_STORAGE_KEY);
+  if (savedHeight) {
+    grid.style.height = savedHeight;
+  }
+
+  let dragging = false;
+
+  handle.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+    dragging = true;
+    handle.classList.add("dragging");
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+  });
+
+  document.addEventListener("mousemove", (event) => {
+    if (!dragging) {
+      return;
+    }
+    const rect = grid.getBoundingClientRect();
+    const minHeight = 280;
+    const height = Math.max(minHeight, event.clientY - rect.top);
+    grid.style.height = `${height}px`;
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (!dragging) {
+      return;
+    }
+    dragging = false;
+    handle.classList.remove("dragging");
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    localStorage.setItem(HEIGHT_STORAGE_KEY, grid.style.height);
+  });
+}
+
 function updateOverlays() {
   const remaining = navApiRemaining();
   const soonest = [remaining.navigation, remaining.api]
@@ -99,17 +141,23 @@ function setTab(tab) {
 }
 
 async function startActiveTab() {
+  if (activeTab === runningTab) {
+    return;
+  }
   if (activeTab === "sdk") {
     stopPostMessageTab();
+    runningTab = "sdk";
     startEmbedSdkTab(pageConfig);
-  } else {
-    stopEmbedSdkTab();
-    await startPostMessageTab(pageConfig);
+    return;
   }
+  stopEmbedSdkTab();
+  runningTab = "postmessage";
+  await startPostMessageTab(pageConfig);
 }
 
 function initLabUi() {
   bindSplitPanel();
+  bindHeightSplit();
   bindObservatory({
     cards: requireElement("token-cards"),
     gantt: requireElement("gantt"),
@@ -117,10 +165,6 @@ function initLabUi() {
     catalog: requireElement("method-catalog"),
     freeze: requireElement("toggle-freeze"),
     ua: requireElement("toggle-ua"),
-  });
-  const mermaidSource = JSON.parse(requireElement("mermaid-source").textContent);
-  renderMermaid(requireElement("mermaid-target"), mermaidSource).catch((error) => {
-    requireElement("mermaid-target").textContent = error.message;
   });
 
   document.querySelectorAll(".tab").forEach((button) => {
@@ -152,6 +196,7 @@ function initLabUi() {
     await api("/api/looker/end-embed-session", { method: "POST" });
     stopEmbedSdkTab();
     stopPostMessageTab();
+    runningTab = null;
     await startActiveTab();
   });
 

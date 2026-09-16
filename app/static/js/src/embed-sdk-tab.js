@@ -44,10 +44,11 @@ function reportEmbedSessionExpired(method, summary) {
     method,
     actor: "iframe postMessage",
     summary,
-    tokens_in: ["iframe_session"],
+    tokens_in: ["iframe_session_sdk"],
     tokens_out: [],
     ok: false,
     expired: true,
+    embed_client: "sdk",
   });
 }
 
@@ -78,6 +79,7 @@ function mountDashboard(containerSelector) {
         tokens_in: ["api_token", "navigation_token"],
         tokens_out: [],
         ok: true,
+        embed_client: "sdk",
       });
     })
     .on("session:expired", () => {
@@ -95,6 +97,7 @@ function mountDashboard(containerSelector) {
         summary: "Embed SDK connected; authentication_token consumed inside /login/embed",
         tokens_in: ["authentication_token", "navigation_token"],
         tokens_out: [],
+        embed_client: "sdk",
       });
     })
     .catch((error) => {
@@ -104,6 +107,7 @@ function mountDashboard(containerSelector) {
         summary: String(error),
         ok: false,
         error: String(error),
+        embed_client: "sdk",
       });
     });
 }

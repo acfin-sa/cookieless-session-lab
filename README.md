@@ -34,7 +34,7 @@ Embed user **identity** comes from the Auth0 id token (`sub`, name, email). Embe
 
 | Env | Default | Sent to Looker acquire as |
 | --- | --- | --- |
-| `LOOKER_EMBED_SESSION_LENGTH` | `3600` (1 h) | `session_length` |
+| `LOOKER_EMBED_SESSION_LENGTH` | `720` (12 min) | `session_length` |
 | `LOOKER_EMBED_FORCE_LOGOUT_LOGIN` | `true` | `force_logout_login` (Looker cookieless ignores this; login is always forced) |
 | `LOOKER_EMBED_GROUP_IDS` | `1` | `group_ids` |
 | `LOOKER_EMBED_EXTERNAL_GROUP_ID` | `cookieless-lab` | `external_group_id` |
@@ -66,12 +66,12 @@ If cookieless endpoints are off, acquire often looks like a generic 404.
 
 ## Tour after login
 
-You land on `/lab` — the Session Observatory. The Looker iframe stays on the right (half screen).
+You land on `/lab` — the Session Observatory. The Looker iframe stays on the right of a height-capped split; the method catalog sits full-width below.
 
 1. **Token constellation** — eight cards, both layers.
 2. **Lifetime swimlane** — Gantt from login `t=0`. Bars tick every second. Hatched end of nav/api = Looker’s ~60s refresh window. Dots = refresh markers.
-3. **Sequence + event log** — static mermaid of the happy path; live rows for Browser / Host API / Auth0 / Looker API / iframe postMessage. Click a row to highlight tokens.
-4. **Method catalog** — table from `docs/token-method-map.json`.
+3. **Live event log** — Browser / Host API / Auth0 / Looker API / iframe postMessage. Click a row to highlight tokens. The static happy-path mermaid lives on `/sequence` (same pattern as `/architecture`).
+4. **Method catalog** — full-width table from `docs/token-method-map.json`, under the dashboards.
 5. **Embed SDK** vs **Raw postMessage** — same observatory. Compare who moves `session:tokens:request` / `session:tokens`.
 6. **Teaching controls**
    - Freeze token refresh — let nav/api expire and watch Looker break.
