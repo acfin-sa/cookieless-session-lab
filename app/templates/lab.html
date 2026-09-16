@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Session Observatory</title>
+    <link rel="stylesheet" href="/static/css/lab.css" />
+</head>
+<body class="page-lab">
+    <header class="lab-header">
+        <div>
+            <p class="eyebrow">Session Observatory</p>
+            <h1>Two nested cookieless sessions</h1>
+            <p class="who">{{ user_name }}{% if user_email %}{% if user_email != user_name %} · {{ user_email }}{% endif %}{% endif %}</p>
+        </div>
+        <nav>
+            <a class="btn" href="/architecture">Architecture</a>
+            <a class="btn danger" href="/logout">Log out</a>
+        </nav>
+    </header>
+
+    <section class="controls" id="lab-controls">
+        <label class="toggle" title="Blocks Looker generate_tokens only. Does not block acquire or host /api/host/refresh.">
+            <input type="checkbox" id="toggle-freeze" />
+            Freeze token refresh
+        </label>
+        <label class="toggle" title="Next generate_tokens sends a fake User-Agent. Looker binds the session to the original UA and returns 400.">
+            <input type="checkbox" id="toggle-ua" />
+            Force User-Agent mismatch
+        </label>
+        <button type="button" title="POST /api/lab/drop-session-reference" id="btn-drop-ref">Drop session_reference on server</button>
+        <button type="button" title="POST /api/looker/end-embed-session" id="btn-end-looker">End Looker session</button>
+    </section>
+
+    <div class="lab-grid">
+        <div class="observatory">
+            <section>
+                <h2>1. Lifetime swimlane</h2>
+                <p class="hint">Dotted lines mark generate_tokens / host refresh — click one to see which process fired.</p>
+                <ul class="gantt-legend" aria-label="Lifetime swimlane color legend">
+                    <li><span class="swatch state-alive"></span> alive</li>
+                    <li><span class="swatch state-expiring"></span> expiring</li>
+                    <li><span class="swatch state-expired"></span> expired</li>
+                    <li><span class="swatch state-consumed"></span> consumed</li>
+                    <li><span class="swatch state-revoked"></span> revoked</li>
+                </ul>
+                <div id="gantt" class="gantt"></div>
+            </section>
+
+            <section>
+                <h2>2. Token constellation</h2>
+                <p class="hint">hola</p>
+                <div id="token-cards" class="token-grid"></div>
+            </section>
+
+            <section class="sequence-row">
+                <div>
+                    <h2>3. Sequence (static happy path)</h2>
+                    <div id="mermaid-target" class="mermaid-box"></div>
+                </div>
+                <div>
+                    <h2>Live event log</h2>
+                    <p class="hint">Click a row to highlight the tokens it touched.</p>
+                    <div id="event-log" class="event-log"></div>
+                </div>
+            </section>
+
+            <section>
+                <h2>4. Method catalog</h2>
+                <p class="hint">Generated from <code>docs/token-method-map.json</code>. Renew is not acquire: refresh/generate rotate short-lived tokens; <code>session_reference_token_ttl == 0</code> means acquire again.</p>
+                <div class="table-wrap">
+                    <table id="method-catalog"></table>
+                </div>
+            </section>
+        </div>
+
+        <div class="resize-handle" id="lab-resize-handle" role="separator" aria-orientation="vertical" aria-label="Drag to resize panels"></div>
+
+        <aside class="iframe-pane">
+            <div class="tab-bar">
+                <button type="button" class="tab active" data-tab="sdk">Embed SDK</button>
+                <button type="button" class="tab" data-tab="postmessage">Raw postMessage</button>
+            </div>
+            <p class="hint" id="tab-caption">
+                The Embed SDK tab uses Looker’s JavaScript library to manage the iframe and tokens;
+                <br>server asks Looker for short-lived tokens and feeds them to the iframe.
+                <br>
+                <br>The Raw postMessage tab directly exchange tokens between the iframe and the window.
+            </p>
+            <div class="iframe-stage" id="stage-sdk">
+                <div id="embed-sdk-root" class="embed-slot"></div>
+                <div class="countdown-overlay hidden" id="overlay-sdk"></div>
+            </div>
+            <div class="iframe-stage hidden" id="stage-postmessage">
+                <div id="postmessage-root" class="embed-slot"></div>
+                <div class="countdown-overlay hidden" id="overlay-pm"></div>
+            </div>
+        </aside>
+    </div>
+
+    <script id="page-config" type="application/json">{{ page_config | tojson }}</script>
+    <script id="method-map" type="application/json">{{ method_map | tojson }}</script>
+    <script id="mermaid-source" type="application/json">{{ mermaid_source | tojson }}</script>
+    <script type="module" src="/static/js/dist/lab.js"></script>
+</body>
+</html>

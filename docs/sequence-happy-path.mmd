@@ -1,0 +1,48 @@
+sequenceDiagram
+    autonumber
+    actor Browser
+    participant Host as Host API
+    participant Auth0
+    participant Looker as Looker API
+    participant Iframe as iframe postMessage
+
+    Browser->>Host: GET /login
+    Host->>Auth0: GET /authorize (PKCE)
+    Auth0->>Browser: redirect /callback?code=
+    Browser->>Host: GET /callback?code=
+    Host->>Auth0: POST /oauth/token (code + verifier)
+    Auth0-->>Host: refresh + access + id
+    Note over Host: HostSession created. host_session_reference stays on the server.
+    Host-->>Browser: Set-Cookie host_session_id (HttpOnly, opaque)
+    Browser->>Host: POST /api/host/bootstrap
+    Host-->>Browser: host_access_token (~200 s, memory)
+
+    Browser->>Host: POST /api/looker/acquire-embed-session
+    Host->>Looker: POST /embed/cookieless_session/acquire
+    Looker-->>Host: 4 tokens including session_reference_token
+    Note over Host: session_reference_token stored server-side, omitted from JSON.
+    Host-->>Browser: authentication_token, navigation_token, api_token + TTLs
+
+    Browser->>Iframe: GET /login/embed/...?embed_authentication_token=
+    Note over Iframe: authentication_token consumed (single use, ~30s).
+    Iframe->>Browser: postMessage session:tokens:request
+    Browser->>Iframe: postMessage session:tokens (api + nav)
+
+    loop Looker asks inside the last 60s of nav/api TTL
+        Iframe->>Browser: session:tokens:request
+        Browser->>Host: PUT /api/looker/generate-embed-tokens
+        Host->>Looker: PUT /embed/cookieless_session/generate_tokens
+        Looker-->>Host: new nav + api (same session_reference)
+        Host-->>Browser: nav + api only
+        Browser->>Iframe: session:tokens
+    end
+
+    Browser->>Host: POST /api/looker/acquire-embed-session (second iframe)
+    Host->>Looker: acquire with stored session_reference_token
+    Looker-->>Host: new authentication_token, same session
+    Browser->>Iframe: second iframe login URL
+
+    Browser->>Host: GET /logout
+    Host->>Looker: DELETE /embed/cookieless_session/{session_reference_token}
+    Host->>Auth0: POST /oauth/revoke (refresh)
+    Host-->>Browser: clear host_session_id, redirect Auth0 /v2/logout

@@ -1,0 +1,399 @@
+import { api } from "./host-client.js";
+
+const EXPIRING_WINDOW = 60;
+const TOKEN_HIGHLIGHT_DURATION_MS = 12_000;
+let snapshot = null;
+let methodMap = null;
+let selectedEventId = null;
+let highlightedTokenIds = [];
+let highlightUntil = 0;
+let refreshLabelIndex = null;
+let refreshLabelUntil = 0;
+let refreshLabelTimer = null;
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function methodListHtml(methods) {
+  if (!methods || methods.length === 0) {
+    return "—";
+  }
+  return methods
+    .map((method) => `<span class="method-line">${escapeHtml(method)}</span>`)
+    .join("");
+}
+
+function liveState(token) {
+  if (token.state === "consumed" || token.state === "revoked" || token.state === "expired") {
+    return token.state;
+  }
+  if (!token.present && token.state === "unborn") {
+    return "unborn";
+  }
+  if (!token.expires_at) {
+    return token.present ? "alive" : "unborn";
+  }
+  const remaining = (Date.parse(token.expires_at) - Date.now()) / 1000;
+  if (remaining <= 0) {
+    return "expired";
+  }
+  if (remaining < EXPIRING_WINDOW) {
+    return "expiring";
+  }
+  return "alive";
+}
+
+function remainingSeconds(token) {
+  if (!token.expires_at) {
+    return null;
+  }
+  return Math.max(0, Math.floor((Date.parse(token.expires_at) - Date.now()) / 1000));
+}
+
+function formatClock(seconds) {
+  if (seconds === null) {
+    return "no exp";
+  }
+  const minutes = Math.floor(seconds / 60);
+  const rest = String(seconds % 60).padStart(2, "0");
+  return `${minutes}:${rest}`;
+}
+
+function layerLabel(layer) {
+  if (layer === "A") {
+    return "Auth0";
+  }
+  if (layer === "B") {
+    return "Looker";
+  }
+  return `${layer} Layer`;
+}
+
+function tokenLifetimeSeconds(token) {
+  if (!token.issued_at || !token.expires_at) {
+    return null;
+  }
+  return Math.max(0, Math.floor((Date.parse(token.expires_at) - Date.parse(token.issued_at)) / 1000));
+}
+
+function formatLifetime(seconds) {
+  if (seconds === null) {
+    return null;
+  }
+  if (seconds >= 3600) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+  }
+  if (seconds >= 60) {
+    return `${Math.floor(seconds / 60)}m`;
+  }
+  return `${seconds}s`;
+}
+
+function layerBStatusHtml(iframeSession) {
+  const iframeState = iframeSession?.state || "unborn";
+  const iframeLabel = {
+    unborn: "not started",
+    alive: "usable",
+    expired: "iframe session expired",
+    revoked: "ended with Layer B identity",
+  }[iframeState] || iframeState;
+  const iframeReason = iframeSession?.state_reason
+    ? `<p class="state-reason">${escapeHtml(iframeSession.state_reason)}</p>`
+    : "";
+  return `
+    <article class="token-card layer-b-cell state-${iframeState}" data-token="iframe_session">
+        <header>
+          <span class="layer">Looker</span>
+          <h3>iframe session</h3>
+        </header>
+        <div class="storage">${escapeHtml(iframeSession?.purpose || "session-level signal.")}</div>
+        <div class="state"><span>${escapeHtml(iframeLabel)}</span></div>
+        ${iframeReason}
+      </article>
+  `;
+}
+
+function renderCards(root) {
+  if (!snapshot) {
+    return;
+  }
+  root.innerHTML = "";
+  for (const token of snapshot.tokens) {
+    const state = liveState(token);
+    const remaining = remainingSeconds(token);
+    const card = document.createElement("article");
+    card.className = `token-card state-${state}`;
+    card.dataset.token = token.id;
+    const ttlRatio = remaining === null || !token.ttl_seconds
+      ? (token.present ? 1 : 0)
+      : Math.min(1, remaining / Math.max(token.ttl_seconds, remaining, 1));
+    const ttlWidth = state === "expired" || state === "revoked" || state === "consumed" ? 100 : Math.round(ttlRatio * 100);
+    const lifetime = tokenLifetimeSeconds(token);
+    const reason = token.state_reason
+      ? `<p class="state-reason">${escapeHtml(token.state_reason)}</p>`
+      : "";
+    card.innerHTML = `
+      <header>
+        <span class="layer">${layerLabel(token.layer)}</span>
+        <h3>${token.name}</h3>
+      </header>
+      <div class="storage">Stored in <code>${token.storage}</code>.${token.purpose ? ` ${escapeHtml(token.purpose)}` : ""}</div>
+      <div class="meta">
+        <span>issued at ${token.issued_at ? new Date(token.issued_at).toLocaleTimeString() : "—"}</span>
+        <span>${lifetime !== null ? `lives for ${formatLifetime(lifetime)}` : "no expiry"}</span>
+      </div>
+      <div class="ttl-bar"><div class="ttl-fill" title="TTL" style="width:${ttlWidth}%"></div></div>
+      <div class="state">
+        <span>${state}</span>
+        ${remaining !== null ? `<span>${formatClock(remaining)}</span>` : ""}
+      </div>
+      ${reason}
+      <dl>
+        <dt>Created by:</dt><dd>${methodListHtml(token.created_by)}</dd>
+        ${(token.renewed_by || []).length ? `<dt>Renewed by:</dt><dd>${methodListHtml(token.renewed_by)}</dd>` : ""}
+        <dt>Consumed by:</dt><dd>${methodListHtml(token.consumed_by)}</dd>
+      </dl>
+    `;
+    root.appendChild(card);
+  }
+  if (snapshot.iframe_session) {
+    root.insertAdjacentHTML("beforeend", layerBStatusHtml(snapshot.iframe_session));
+  }
+  applyTokenHighlights();
+}
+
+function applyTokenHighlights() {
+  const active = Date.now() < highlightUntil;
+  const tokenIds = active ? highlightedTokenIds : [];
+  document.querySelectorAll(".token-card, .layer-b-cell").forEach((card) => {
+    card.classList.toggle("hot", tokenIds.includes(card.dataset.token));
+  });
+}
+
+function ganttRows() {
+  const rows = [];
+  for (const token of snapshot.tokens) {
+    rows.push(token);
+    if (token.id === "session_reference_token" && snapshot.iframe_session) {
+      rows.push(snapshot.iframe_session);
+    }
+  }
+  return rows;
+}
+
+function renderGantt(root) {
+  if (!snapshot) {
+    return;
+  }
+  const t0 = Date.parse(snapshot.login_t0);
+  const now = Date.now();
+  const horizon = Math.max(now - t0 + 60_000, 12 * 60_000);
+  const rowHeight = 28;
+  const left = 168;
+  const width = 720;
+  const rows = ganttRows();
+  const height = 40 + rows.length * rowHeight;
+  const x = (ms) => left + ((ms - t0) / horizon) * (width - left - 16);
+  const parts = [];
+  parts.push(`<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}">`);
+  rows.forEach((token, index) => {
+    const y = 24 + index * rowHeight;
+    const issued = token.issued_at ? Date.parse(token.issued_at) : t0;
+    const openEnded = token.id === "iframe_session" && !token.expires_at && token.state === "alive";
+    const expires = token.expires_at ? Date.parse(token.expires_at) : (openEnded ? now : now + 60_000);
+    const x1 = x(issued);
+    const x2 = Math.max(x1 + 4, x(Math.min(expires, t0 + horizon)));
+    const state = liveState(token);
+    const color = {
+      alive: "#3dd68c",
+      expiring: "#f0b429",
+      expired: "#ef5b5b",
+      consumed: "#b57bff",
+      revoked: "#c45c5c",
+      unborn: "#5b6578",
+    }[state];
+    parts.push(`<text x="8" y="${y + 12}" fill="#8b97ab" font-size="11">${token.id}</text>`);
+    if (token.present || token.state !== "unborn") {
+      parts.push(`<rect x="${x1}" y="${y}" width="${x2 - x1}" height="14" rx="3" fill="${color}" opacity="0.85"></rect>`);
+    }
+    if (token.id === "navigation_token" || token.id === "api_token") {
+      const windowStart = expires - EXPIRING_WINDOW * 1000;
+      const wx1 = x(windowStart);
+      const wx2 = x(expires);
+      parts.push(`<rect x="${wx1}" y="${y}" width="${Math.max(0, wx2 - wx1)}" height="14" fill="url(#hatch)"></rect>`);
+    }
+  });
+  for (const [index, marker] of (snapshot.refresh_markers || []).entries()) {
+    const at = marker.at || marker;
+    const process = marker.process || "token renew";
+    const mx = x(Date.parse(at));
+    parts.push(`<line x1="${mx}" x2="${mx}" y1="18" y2="${height - 8}" stroke="#6cb6ff" stroke-dasharray="3 3" pointer-events="none"></line>`);
+    parts.push(`<rect class="refresh-hit" data-refresh-index="${index}" data-refresh-process="${escapeHtml(process)}" x="${mx - 6}" y="18" width="12" height="${height - 26}" fill="transparent" cursor="pointer"></rect>`);
+  }
+  const nowX = x(now);
+  parts.push(`<line x1="${nowX}" x2="${nowX}" y1="8" y2="${height}" stroke="#e8eef7" pointer-events="none"></line>`);
+  parts.push(`
+    <defs>
+      <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+        <line x1="0" y1="0" x2="0" y2="6" stroke="#10141c" stroke-width="3"></line>
+      </pattern>
+    </defs>
+  `);
+  parts.push("</svg>");
+  const labelStillOpen = refreshLabelIndex !== null && Date.now() < refreshLabelUntil;
+  const openMarker = labelStillOpen ? (snapshot.refresh_markers || [])[refreshLabelIndex] : null;
+  if (openMarker) {
+    const at = openMarker.at || openMarker;
+    const process = openMarker.process || "token renew";
+    const leftPercent = (x(Date.parse(at)) / width) * 100;
+    parts.push(`<div class="gantt-refresh-label" style="left:${leftPercent}%">${escapeHtml(process)}</div>`);
+  } else {
+    refreshLabelIndex = null;
+  }
+  root.innerHTML = parts.join("");
+}
+
+function renderEvents(root) {
+  if (!snapshot) {
+    return;
+  }
+  root.innerHTML = "";
+  const events = [...(snapshot.events || [])].reverse();
+  for (const event of events) {
+    const row = document.createElement("div");
+    row.className = `event-row${event.ok ? "" : " fail"}${event.id === selectedEventId ? " active" : ""}`;
+    row.dataset.eventId = event.id;
+    row.dataset.tokens = [...(event.tokens_in || []), ...(event.tokens_out || [])].join(",");
+    const when = event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : "";
+    row.innerHTML = `
+      <div><span class="when">${when}</span> · <span class="actor">${event.actor}</span></div>
+      <div><strong>${event.method}</strong></div>
+      <div>${event.summary || ""}</div>
+      <div class="when">in: ${(event.tokens_in || []).join(", ") || "—"} · out: ${(event.tokens_out || []).join(", ") || "—"}</div>
+    `;
+    root.appendChild(row);
+  }
+}
+
+function renderCatalog(table, map) {
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>method</th>
+        <th>role</th>
+        <th>direction</th>
+        <th>tokens in</th>
+        <th>tokens out</th>
+        <th>where token lives after</th>
+        <th>failure modes</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+  const body = table.querySelector("tbody");
+  for (const method of map.methods || []) {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${method.method}</td>
+      <td>${method.kind || "—"}</td>
+      <td>${method.direction}</td>
+      <td>${(method.tokens_in || []).join(", ")}</td>
+      <td>${(method.tokens_out || []).join(", ")}</td>
+      <td>${method.where_after}</td>
+      <td>${(method.failure_modes || []).join(" · ")}</td>
+    `;
+    body.appendChild(row);
+  }
+}
+
+export function highlightTokens(tokenIds, durationMs = TOKEN_HIGHLIGHT_DURATION_MS) {
+  highlightedTokenIds = tokenIds;
+  highlightUntil = Date.now() + durationMs;
+  applyTokenHighlights();
+}
+
+export function navApiRemaining() {
+  if (!snapshot) {
+    return { navigation: null, api: null };
+  }
+  const byId = Object.fromEntries(snapshot.tokens.map((token) => [token.id, token]));
+  return {
+    navigation: remainingSeconds(byId.navigation_token || {}),
+    api: remainingSeconds(byId.api_token || {}),
+    flags: snapshot.flags,
+  };
+}
+
+export function bindObservatory(elements) {
+  methodMap = JSON.parse(document.getElementById("method-map").textContent);
+  renderCatalog(elements.catalog, methodMap);
+
+  elements.events.addEventListener("click", (event) => {
+    const row = event.target.closest(".event-row");
+    if (!row) {
+      return;
+    }
+    selectedEventId = row.dataset.eventId;
+    highlightTokens((row.dataset.tokens || "").split(",").filter(Boolean));
+    renderEvents(elements.events);
+  });
+
+  elements.gantt.addEventListener("click", (event) => {
+    const hit = event.target.closest("[data-refresh-index]");
+    if (!hit) {
+      return;
+    }
+    refreshLabelIndex = Number(hit.dataset.refreshIndex);
+    refreshLabelUntil = Date.now() + 3000;
+    if (refreshLabelTimer) {
+      clearTimeout(refreshLabelTimer);
+    }
+    refreshLabelTimer = setTimeout(() => {
+      refreshLabelIndex = null;
+      refreshLabelUntil = 0;
+      renderGantt(elements.gantt);
+    }, 3000);
+    renderGantt(elements.gantt);
+  });
+
+  async function poll() {
+    snapshot = await api("/api/lab/snapshot");
+    renderCards(elements.cards);
+    renderGantt(elements.gantt);
+    renderEvents(elements.events);
+    if (elements.freeze) {
+      elements.freeze.checked = Boolean(snapshot.flags.freeze_token_refresh);
+    }
+    if (elements.ua) {
+      elements.ua.checked = Boolean(snapshot.flags.force_user_agent_mismatch);
+    }
+  }
+
+  poll().catch((error) => console.warn(error));
+  setInterval(() => {
+    if (snapshot) {
+      renderCards(elements.cards);
+      renderGantt(elements.gantt);
+    }
+  }, 1000);
+  setInterval(() => {
+    poll().catch((error) => console.warn(error));
+  }, 4000);
+
+  return { poll };
+}
+
+export async function renderMermaid(target, source) {
+  const mermaidModule = await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs");
+  const mermaid = mermaidModule.default;
+  mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "strict" });
+  const { svg } = await mermaid.render("happy-path-diagram", source.trim());
+  target.innerHTML = svg;
+}

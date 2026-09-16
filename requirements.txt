@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+starlette
+jinja2
+python-dotenv
+authlib
+pyjwt
+httpx
+itsdangerous
+python-multipart
+looker-sdk
+markdown

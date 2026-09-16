@@ -1,0 +1,109 @@
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import markdown
+from fastapi import APIRouter, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+
+from config import (
+    APP_BASE_URL,
+    ARCHITECTURE_PATH,
+    HOST_ACCESS_TOKEN_TTL_SECONDS,
+    LOOKER_EMBED_DASHBOARD_ID,
+    LOOKER_EMBED_HOST,
+    LOOKER_EMBED_SESSION_LENGTH,
+    SEQUENCE_DIAGRAM_PATH,
+    public_url,
+)
+from services.deps import session_from_cookie
+from services.observatory import load_method_map
+
+templates = Jinja2Templates(
+    directory=str(Path(__file__).resolve().parent.parent / "templates")
+)
+views_router = APIRouter()
+
+
+def _architecture_markdown_source() -> str:
+    """ARCHITECTURE.md is the single source of truth; /architecture renders it."""
+    source = ARCHITECTURE_PATH.read_text(encoding="utf-8")
+    # Show live configured values on the web page (env may override config.py defaults).
+    source = source.replace(
+        "| `HOST_ACCESS_TOKEN_TTL_SECONDS` | `app/config.py` (default **200** s) |",
+        f"| `HOST_ACCESS_TOKEN_TTL_SECONDS` | `app/config.py` (**{HOST_ACCESS_TOKEN_TTL_SECONDS}** s) |",
+    )
+    source = source.replace(
+        "| `LOOKER_EMBED_SESSION_LENGTH` | `.env` (default **3600** s) |",
+        f"| `LOOKER_EMBED_SESSION_LENGTH` | `.env` (**{LOOKER_EMBED_SESSION_LENGTH}** s) |",
+    )
+    source = source.replace(
+        "memory only (HOST_ACCESS_TOKEN_TTL_SECONDS, default 200 s)",
+        f"memory only (HOST_ACCESS_TOKEN_TTL_SECONDS = {HOST_ACCESS_TOKEN_TTL_SECONDS} s)",
+    )
+    return source
+
+
+def _render_architecture_html() -> str:
+    html = markdown.markdown(
+        _architecture_markdown_source(),
+        extensions=["tables", "fenced_code", "sane_lists"],
+    )
+    # Template header already shows the document title.
+    return re.sub(r"^<h1>.*?</h1>\s*", "", html, count=1)
+
+
+def _page_config() -> dict:
+    return {
+        "lookerEmbedHost": LOOKER_EMBED_HOST,
+        "lookerDashboardId": LOOKER_EMBED_DASHBOARD_ID,
+        "embedDomain": APP_BASE_URL,
+    }
+
+
+@views_router.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    session = session_from_cookie(request)
+    if session is not None and not session.host_revoked:
+        return RedirectResponse(url=public_url("/lab"), status_code=302)
+    return templates.TemplateResponse(
+        request=request,
+        name="home.html",
+        context={},
+    )
+
+
+@views_router.get("/architecture", response_class=HTMLResponse)
+async def architecture(request: Request):
+    session = session_from_cookie(request)
+    return templates.TemplateResponse(
+        request=request,
+        name="architecture.html",
+        context={
+            "architecture_html": _render_architecture_html(),
+            "logged_in": session is not None and not session.host_revoked,
+            "user_name": session.display_name() if session else None,
+            "user_email": session.email() if session else None,
+        },
+    )
+
+
+@views_router.get("/lab", response_class=HTMLResponse)
+async def lab(request: Request):
+    session = session_from_cookie(request)
+    if session is None or session.host_revoked:
+        return RedirectResponse(url=public_url("/"), status_code=302)
+    mermaid_source = SEQUENCE_DIAGRAM_PATH.read_text(encoding="utf-8")
+    return templates.TemplateResponse(
+        request=request,
+        name="lab.html",
+        context={
+            "page_config": _page_config(),
+            "method_map": load_method_map(),
+            "mermaid_source": mermaid_source,
+            "user_name": session.display_name(),
+            "user_email": session.email(),
+        },
+    )

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Architecture — Cookieless session lab</title>
+    <link rel="stylesheet" href="/static/css/lab.css" />
+</head>
+<body class="page-architecture">
+    <header class="lab-header">
+        <div>
+            <p class="eyebrow">Design method</p>
+            <h1>Architecture — nested cookieless sessions</h1>
+            <p class="hint">Rendered from <code>ARCHITECTURE.md</code> at request time.</p>
+            {% if logged_in and user_name %}
+            <p class="who">{{ user_name }}{% if user_email %}{% if user_email != user_name %} · {{ user_email }}{% endif %}{% endif %}</p>
+            {% endif %}
+        </div>
+        <nav>
+            {% if logged_in %}
+            <a class="btn" href="/lab">Observatory</a>
+            <a class="btn danger" href="/logout">Log out</a>
+            {% else %}
+            <a class="btn" href="/">Home</a>
+            <a class="btn primary" href="/login">Log in</a>
+            {% endif %}
+        </nav>
+    </header>
+
+    {# Body content is markdown from ARCHITECTURE.md via views._render_architecture_html() #}
+    <main class="architecture-content">
+        {{ architecture_html | safe }}
+    </main>
+</body>
+</html>

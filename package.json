@@ -1,0 +1,18 @@
+{
+  "name": "cookieless-session-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pedagogical test bench for nested Auth0 + Looker cookieless sessions",
+  "scripts": {
+    "postinstall": "node scripts/ensure-venv.mjs",
+    "build:js": "esbuild app/static/js/src/lab.js --bundle --format=esm --platform=browser --outfile=app/static/js/dist/lab.js --sourcemap",
+    "watch:js": "esbuild app/static/js/src/lab.js --bundle --format=esm --platform=browser --outfile=app/static/js/dist/lab.js --sourcemap --watch",
+    "dev": "node scripts/dev.mjs"
+  },
+  "dependencies": {
+    "@looker/embed-sdk": "^2.0.6"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.9"
+  }
+}

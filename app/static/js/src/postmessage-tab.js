@@ -1,0 +1,188 @@
+import { api, reportEvent } from "./host-client.js";
+
+let pageConfig = null;
+let applicationTokens = null;
+let connectedIframes = new WeakSet();
+let listenerBound = false;
+
+function lookerOrigin() {
+  return new URL(pageConfig.lookerEmbedHost).origin;
+}
+
+function cookielessLoginUrl(authenticationToken, navigationToken, dashboardId) {
+  // TOKEN: authentication_token (query, single use), navigation_token (embed_navigation_token)
+  // CREATED BY: POST /api/looker/acquire-embed-session
+  // CONSUMED BY: GET /login/embed/... on the Looker origin (iframe navigation)
+  // LIVES AT: URL once for authentication_token; navigation_token also later via postMessage
+  // TTL: authentication ~30s single-use; navigation ~10 min
+  // WHY: bootstrap handle belongs on the URL exactly once. The iframe is not allowed to mint it.
+  const embedUrl = new URL(`/embed/dashboards/${dashboardId}`, pageConfig.lookerEmbedHost);
+  embedUrl.searchParams.set("embed_domain", pageConfig.embedDomain);
+  embedUrl.searchParams.set("embed_navigation_token", navigationToken);
+  const targetUri = encodeURIComponent(`${embedUrl.pathname}${embedUrl.search}${embedUrl.hash}`);
+  return `${lookerOrigin()}/login/embed/${targetUri}?embed_authentication_token=${authenticationToken}`;
+}
+
+function parseMessage(event) {
+  if (event.origin !== lookerOrigin()) {
+    return null;
+  }
+  let data = event.data;
+  if (typeof data === "string") {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      return null;
+    }
+  }
+  return data;
+}
+
+function sendTokens(contentWindow, tokens) {
+  // TOKEN: api_token, navigation_token
+  // CREATED BY: acquire (first reply) or generate_tokens (later replies)
+  // CONSUMED BY: Looker UI inside the iframe
+  // LIVES AT: iframe. Never include session_reference_token.
+  // TTL: ~10 minutes
+  // WHY: iframe may ask; host answers. This is the untrusted-peer boundary.
+  const message = {
+    type: "session:tokens",
+    api_token: tokens.api_token,
+    api_token_ttl: tokens.api_token_ttl,
+    navigation_token: tokens.navigation_token,
+    navigation_token_ttl: tokens.navigation_token_ttl,
+    session_reference_token_ttl: tokens.session_reference_token_ttl,
+  };
+  contentWindow.postMessage(JSON.stringify(message), lookerOrigin());
+}
+
+async function onMessage(event) {
+  const data = parseMessage(event);
+  if (!data) {
+    return;
+  }
+  if (data.type === "session:status" && data.expired) {
+    await reportEvent({
+      method: "session:status",
+      actor: "iframe postMessage",
+      summary: "iframe session:status expired=true — embed cannot keep working; session_reference not revoked. Nav/api JWT clocks are unchanged.",
+      tokens_in: ["iframe_session"],
+      tokens_out: [],
+      ok: false,
+      expired: true,
+    });
+    return;
+  }
+  if (data.type !== "session:tokens:request") {
+    return;
+  }
+  await reportEvent({
+    method: "postMessage session:tokens:request",
+    actor: "iframe postMessage",
+    summary: "Looker iframe asked the host for tokens",
+    tokens_in: [],
+    tokens_out: [],
+  });
+  const iframeWindow = event.source;
+  if (!connectedIframes.has(iframeWindow) && applicationTokens) {
+    connectedIframes.add(iframeWindow);
+    sendTokens(iframeWindow, applicationTokens);
+    await reportEvent({
+      method: "postMessage session:tokens",
+      actor: "Browser",
+      summary: "first reply reused acquire tokens (no generate_tokens yet)",
+      tokens_in: ["api_token", "navigation_token"],
+      tokens_out: ["api_token", "navigation_token"],
+    });
+    return;
+  }
+  try {
+    const tokens = await api("/api/looker/generate-embed-tokens", {
+      method: "PUT",
+      body: "{}",
+    });
+    applicationTokens = { ...applicationTokens, ...tokens };
+    sendTokens(iframeWindow, applicationTokens);
+    await reportEvent({
+      method: "postMessage session:tokens",
+      actor: "Browser",
+      summary: tokens.frozen
+        ? "replied with unrotated tokens because freeze is on"
+        : "replied with generate_tokens output",
+      tokens_in: ["api_token", "navigation_token"],
+      tokens_out: ["api_token", "navigation_token"],
+    });
+  } catch (error) {
+    iframeWindow.postMessage(
+      JSON.stringify({ type: "session:tokens", session_reference_token_ttl: 0 }),
+      lookerOrigin()
+    );
+    await reportEvent({
+      method: "postMessage session:tokens",
+      actor: "Browser",
+      summary: `generate failed; sent ttl=0 so the iframe can expire. ${error.message}`,
+      ok: false,
+      error: error.message,
+    });
+  }
+}
+
+function bindListener() {
+  if (listenerBound) {
+    return;
+  }
+  window.addEventListener("message", onMessage);
+  listenerBound = true;
+}
+
+function createIframe(container, url) {
+  const iframe = document.createElement("iframe");
+  iframe.src = url;
+  iframe.setAttribute("allowfullscreen", "true");
+  iframe.setAttribute("title", "Looker cookieless embed");
+  container.appendChild(iframe);
+  return iframe;
+}
+
+async function acquireAndMount(container) {
+  const tokens = await api("/api/looker/acquire-embed-session", {
+    method: "POST",
+    body: "{}",
+  });
+  applicationTokens = tokens;
+  const url = cookielessLoginUrl(
+    tokens.authentication_token,
+    tokens.navigation_token,
+    pageConfig.lookerDashboardId
+  );
+  await reportEvent({
+    method: "iframe navigation to embed login URL",
+    actor: "Browser",
+    summary: "raw postMessage tab set iframe src to /login/embed with embed_authentication_token",
+    tokens_in: ["authentication_token", "navigation_token"],
+    tokens_out: [],
+  });
+  createIframe(container, url);
+}
+
+export async function startPostMessageTab(config) {
+  pageConfig = config;
+  bindListener();
+  document.getElementById("postmessage-root").innerHTML = "";
+  if (!config.lookerDashboardId || !config.lookerEmbedHost) {
+    document.getElementById("postmessage-root").textContent =
+      "Set LOOKER_EMBED_HOST and LOOKER_EMBED_DASHBOARD_ID in .env";
+    return;
+  }
+  await acquireAndMount(document.getElementById("postmessage-root"));
+}
+
+export function stopPostMessageTab() {
+  if (listenerBound) {
+    window.removeEventListener("message", onMessage);
+    listenerBound = false;
+  }
+  applicationTokens = null;
+  connectedIframes = new WeakSet();
+  document.getElementById("postmessage-root").innerHTML = "";
+}

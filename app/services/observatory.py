@@ -1,0 +1,270 @@
+from __future__ import annotations
+
+import json
+from datetime import datetime
+from typing import Any
+
+from config import TOKEN_METHOD_MAP_PATH
+from services.store import HostSession, isoformat, utc_now
+
+EXPIRING_WINDOW_SECONDS = 60
+
+TOKEN_VALUES = {
+    "auth0_refresh": lambda session: session.auth0_refresh_token,
+    "auth0_access": lambda session: session.auth0_access_token,
+    "host_session_reference": lambda session: session.host_session_reference,
+    "host_access_token": lambda session: session.host_access_token,
+    "session_reference_token": lambda session: session.looker_session_reference_token,
+    "authentication_token": lambda session: session.looker_authentication_token,
+    "navigation_token": lambda session: session.looker_navigation_token,
+    "api_token": lambda session: session.looker_api_token,
+}
+
+
+def load_method_map() -> dict[str, Any]:
+    return json.loads(TOKEN_METHOD_MAP_PATH.read_text(encoding="utf-8"))
+
+
+def _methods_for_token(
+    method_map: dict[str, Any], token_id: str
+) -> tuple[list[str], list[str], list[str]]:
+    created_by: list[str] = []
+    renewed_by: list[str] = []
+    consumed_by: list[str] = []
+    for method in method_map.get("methods", []):
+        kind = method.get("kind")
+        if token_id in method.get("tokens_out", []):
+            if kind == "create":
+                created_by.append(method["method"])
+            elif kind == "renew":
+                renewed_by.append(method["method"])
+        if token_id in method.get("tokens_in", []):
+            consumed_by.append(method["method"])
+    return created_by, renewed_by, consumed_by
+
+
+def _token_times(session: HostSession, token_id: str) -> tuple[datetime | None, datetime | None]:
+    issued = {
+        "auth0_refresh": session.created_at,
+        "auth0_access": session.auth0_access_issued_at,
+        "host_session_reference": session.created_at,
+        "host_access_token": session.host_access_token_issued_at,
+        "session_reference_token": session.looker_session_reference_issued_at,
+        "authentication_token": session.looker_authentication_issued_at,
+        "navigation_token": session.looker_navigation_issued_at,
+        "api_token": session.looker_api_token_issued_at,
+    }[token_id]
+    expires = {
+        "auth0_refresh": None,
+        "auth0_access": session.auth0_access_expires_at,
+        "host_session_reference": None,
+        "host_access_token": session.host_access_token_expires_at,
+        "session_reference_token": session.looker_session_reference_expires_at,
+        "authentication_token": session.looker_authentication_expires_at,
+        "navigation_token": session.looker_navigation_expires_at,
+        "api_token": session.looker_api_token_expires_at,
+    }[token_id]
+    return issued, expires
+
+
+def compute_state(
+    *,
+    present: bool,
+    consumed: bool,
+    revoked: bool,
+    expires_at: datetime | None,
+    now: datetime,
+    revoked_when_absent: bool = False,
+) -> str:
+    """Per-token state. One Layer B flag must not paint every card.
+
+    ``revoked`` = true session teardown (End Looker, ttl==0, logout, drop).
+    ``expired`` = this JWT's own clock elapsed.
+    iframe ``session:expired`` is not a per-token flag — see ``iframe_session_snapshot``.
+    """
+    if consumed:
+        return "consumed"
+    if revoked and (present or revoked_when_absent):
+        return "revoked"
+    if not present and not revoked:
+        return "unborn"
+    if expires_at is not None:
+        remaining = (expires_at - now).total_seconds()
+        if remaining <= 0:
+            return "expired"
+        if remaining < EXPIRING_WINDOW_SECONDS:
+            return "expiring"
+        return "alive"
+    if revoked:
+        return "revoked"
+    return "alive"
+
+
+def _layer_b_token_flags(session: HostSession, token_id: str) -> tuple[bool, bool, bool]:
+    """Return (consumed, revoked, revoked_when_absent).
+
+    session_reference dies on ttl==0, End Looker, or drop — not on session:expired.
+    nav/api follow their own JWT exp; revoked only on full Layer B teardown.
+    authentication_token stays consumed after /login/embed.
+    """
+    if token_id == "authentication_token":
+        consumed = session.looker_authentication_consumed
+        revoked = session.looker_session_revoked and not consumed
+        return consumed, revoked, True
+    if token_id == "session_reference_token":
+        revoked = session.looker_session_revoked or session.session_reference_dropped
+        return False, revoked, True
+    if token_id in {"navigation_token", "api_token"}:
+        return False, session.looker_session_revoked, True
+    return False, False, False
+
+
+def iframe_session_snapshot(session: HostSession, now: datetime) -> dict[str, Any]:
+    """Layer B row for the iframe's session-level 'I can't keep working' signal.
+
+    This is not navigation_token and not api_token. Those cards keep their own exp.
+    """
+    issued_at = session.looker_session_reference_issued_at or session.looker_navigation_issued_at
+    if session.looker_iframe_session_expired:
+        state = "expired"
+        expires_at = session.looker_iframe_session_expired_at or now
+        reason = (
+            "iframe session expired — embed cannot keep working "
+            "(session:expired / expired session:status). Not a nav or api JWT clock."
+        )
+    elif session.looker_session_revoked:
+        state = "revoked"
+        expires_at = now
+        reason = "Layer B identity ended (ttl==0 or End Looker)."
+    elif issued_at:
+        state = "alive"
+        expires_at = None
+        reason = "iframe has not reported session:expired."
+    else:
+        state = "unborn"
+        expires_at = None
+        reason = "no cookieless embed session yet"
+    return {
+        "id": "iframe_session",
+        "name": "iframe session",
+        "layer": "B",
+        "storage": "iframe event (session:expired)",
+        "state": state,
+        "state_reason": reason,
+        "present": state != "unborn",
+        "issued_at": isoformat(issued_at),
+        "expires_at": isoformat(expires_at),
+        "purpose": (
+            "Session-level signal."
+        ),
+    }
+
+
+def _state_reason(
+    token_id: str,
+    state: str,
+    session: HostSession,
+) -> str:
+    if state == "consumed":
+        return "used once on /login/embed — not revoked"
+    if token_id == "session_reference_token" and state == "alive":
+        if session.looker_iframe_session_expired and session.looker_session_reference_token:
+            return "iframe session expired does not revoke this reference — generate_tokens or re-acquire"
+    if token_id == "session_reference_token" and state == "revoked":
+        if session.session_reference_dropped:
+            return "dropped on the host — Looker session may still exist until TTL"
+        return "Looker session identity ended (ttl==0 or End Looker)"
+    if token_id == "navigation_token" and state == "expired":
+        return "this navigation_token JWT's exp elapsed — independent of api_token and of iframe session:expired"
+    if token_id == "api_token" and state == "expired":
+        return "this api_token JWT's exp elapsed — independent of navigation_token and of iframe session:expired"
+    if token_id in {"navigation_token", "api_token"} and state == "revoked":
+        return "Layer B torn down (End Looker, ttl==0, or logout)"
+    if token_id == "authentication_token" and state == "revoked":
+        return "Layer B torn down before authentication_token was consumed"
+    if state == "expiring":
+        return "inside the ~60s refresh window"
+    if state == "revoked" and token_id in {
+        "auth0_refresh",
+        "auth0_access",
+        "host_session_reference",
+        "host_access_token",
+    }:
+        return "host session revoked (logout)"
+    return ""
+
+
+def build_snapshot(session: HostSession) -> dict[str, Any]:
+    method_map = load_method_map()
+    now = utc_now()
+    tokens = []
+    for spec in method_map.get("tokens", []):
+        token_id = spec["id"]
+        value = TOKEN_VALUES[token_id](session)
+        issued_at, expires_at = _token_times(session, token_id)
+        consumed = False
+        revoked = False
+        revoked_when_absent = False
+        if token_id in {"auth0_refresh", "auth0_access", "host_session_reference", "host_access_token"}:
+            revoked = session.host_revoked
+            revoked_when_absent = True
+        else:
+            consumed, revoked, revoked_when_absent = _layer_b_token_flags(session, token_id)
+        if token_id == "session_reference_token" and session.session_reference_dropped:
+            value = None
+        created_by, renewed_by, consumed_by = _methods_for_token(method_map, token_id)
+        state = compute_state(
+            present=bool(value),
+            consumed=consumed,
+            revoked=revoked,
+            expires_at=expires_at,
+            now=now,
+            revoked_when_absent=revoked_when_absent,
+        )
+        ttl_seconds = None
+        if expires_at is not None:
+            ttl_seconds = max(0, int((expires_at - now).total_seconds()))
+        card = {
+            "id": token_id,
+            "name": spec["name"],
+            "layer": spec["layer"],
+            "storage": spec["storage"],
+            "purpose": spec.get("purpose") or "",
+            "state": state,
+            "state_reason": _state_reason(token_id, state, session),
+            "present": bool(value),
+            "issued_at": isoformat(issued_at),
+            "expires_at": isoformat(expires_at),
+            "ttl_seconds": ttl_seconds,
+            "created_by": created_by,
+            "renewed_by": renewed_by,
+            "consumed_by": consumed_by,
+        }
+        tokens.append(card)
+    return {
+        "login_t0": isoformat(session.created_at),
+        "now": isoformat(now),
+        "user": {
+            "name": session.display_name(),
+            "email": session.email(),
+            "sub": session.external_user_id(),
+        },
+        "flags": {
+            "freeze_token_refresh": session.freeze_token_refresh,
+            "force_user_agent_mismatch": session.force_user_agent_mismatch,
+            "session_reference_dropped": session.session_reference_dropped,
+            "looker_session_revoked": session.looker_session_revoked,
+            "looker_iframe_session_expired": session.looker_iframe_session_expired,
+        },
+        "iframe_session": iframe_session_snapshot(session, now),
+        "tokens": tokens,
+        "events": [event.to_public_dict() for event in session.events[-120:]],
+        "refresh_markers": [
+            {
+                "at": isoformat(marker["at"] if isinstance(marker, dict) else marker),
+                "process": marker["process"] if isinstance(marker, dict) else "token renew",
+            }
+            for marker in session.refresh_markers
+        ],
+        "looker_bound_user_agent": session.user_agent,
+    }
