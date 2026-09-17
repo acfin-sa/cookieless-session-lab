@@ -209,7 +209,7 @@
       "where_after": "session_reference_token stays on the server. New nav/api tokens returned to the browser without the reference.",
       "failure_modes": [
         "400 User-Agent mismatch (lab button)",
-        "ttl == 0 means session dead, not an HTTP error",
+        "ttl == 0 is wrapped as HTTP 409 code SESSION_DEAD",
         "invalid or unknown session_reference_token"
       ]
     },

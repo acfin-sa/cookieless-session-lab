@@ -29,7 +29,7 @@ Invariants first: [INVARIANTS.md](INVARIANTS.md). Map: [CODEMAP.md](CODEMAP.md).
 2. Create/consume in the owning service (`host_tokens.py` or `looker_client.py`) with a `TOKEN:` comment.
 3. Update JSON filter if the token is server-only (`looker.py`).
 4. Add `docs/token-method-map.json` `tokens[]` + method `tokens_in`/`tokens_out`.
-5. Wire `observatory.py` `TOKEN_VALUES` / `_token_times` / flags.
+5. Wire `observatory.py` `TOKEN_VALUE_FROM_SESSION` / `_token_times` / flags.
 6. Update CONTEXT + INVARIANTS.
 
 ## Add an event
