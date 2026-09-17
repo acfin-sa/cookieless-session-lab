@@ -26,7 +26,7 @@ from config import (
     public_url,
 )
 from services.auth0_client import revoke_auth0_refresh
-from services.deps import (
+from services.host_session_auth import (
     clear_host_session_cookie,
     request_user_agent,
     session_from_cookie,
@@ -35,7 +35,7 @@ from services.deps import (
 from services.events import log_event
 from services.host_tokens import apply_auth0_token_set, mint_host_access_token
 from services.looker_client import LookerNotConfigured, end_embed_session
-from services.store import HostSession, store, utc_now
+from services.session_store import HostSession, session_store, utc_now
 
 oauth = OAuth()
 oauth.register(
@@ -94,7 +94,7 @@ async def callback(request: Request):
     )
     apply_auth0_token_set(session, token_set)
     mint_host_access_token(session, process="Auth0 login — mint host_access_token")
-    store.put(session)
+    session_store.save(session)
     request.session.clear()
     log_event(
         session,
@@ -128,7 +128,7 @@ async def logout(request: Request):
         except Exception:
             pass
         await revoke_auth0_refresh(session)
-        session.host_revoked = True
+        session.host_session_revoked = True
         log_event(
             session,
             method="logout",
@@ -139,7 +139,7 @@ async def logout(request: Request):
             ok=True,
             status_code=302,
         )
-        store.delete(session.host_session_id)
+        session_store.delete(session.host_session_id)
 
     request.session.clear()
     query = urlencode(

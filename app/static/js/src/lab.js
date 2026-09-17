@@ -1,13 +1,15 @@
-import { api, bootstrapHostSession } from "./host-client.js";
-import { bindObservatory, navApiRemaining } from "./observatory.js";
+import { fetchWithHostAccessToken, bootstrapHostSession } from "./host-client.js";
+import { bindObservatory, remainingNavigationAndApiSeconds } from "./observatory.js";
 import { startEmbedSdkTab, stopEmbedSdkTab } from "./embed-sdk-tab.js";
 import { startPostMessageTab, stopPostMessageTab } from "./postmessage-tab.js";
 
 const pageConfig = JSON.parse(document.getElementById("page-config").textContent);
 const SPLIT_STORAGE_KEY = "lab-observatory-width";
 const HEIGHT_STORAGE_KEY = "lab-split-height";
-let activeTab = "sdk";
-let runningTab = null;
+const EMBED_SDK_TAB = "embed-sdk";
+const POSTMESSAGE_TAB = "postmessage";
+let selectedTab = EMBED_SDK_TAB;
+let mountedEmbedTab = null;
 
 function requireElement(id) {
   const element = document.getElementById(id);
@@ -17,7 +19,7 @@ function requireElement(id) {
   return element;
 }
 
-function bind(id, event, handler) {
+function onElementEvent(id, event, handler) {
   requireElement(id).addEventListener(event, handler);
 }
 
@@ -28,7 +30,7 @@ function showLabError(message) {
   );
 }
 
-function bindSplitPanel() {
+function bindWidthSplit() {
   const grid = document.querySelector(".lab-grid");
   const observatory = grid.querySelector(".observatory");
   const handle = requireElement("lab-resize-handle");
@@ -110,53 +112,53 @@ function bindHeightSplit() {
   });
 }
 
-function updateOverlays() {
-  const remaining = navApiRemaining();
-  const soonest = [remaining.navigation, remaining.api]
+function updateExpiryCountdownOverlays() {
+  const remaining = remainingNavigationAndApiSeconds();
+  const soonestRemainingSeconds = [remaining.navigation, remaining.api]
     .filter((value) => value !== null)
     .sort((left, right) => left - right)[0];
-  const overlays = [requireElement("overlay-sdk"), requireElement("overlay-pm")];
+  const overlays = [requireElement("overlay-embed-sdk"), requireElement("overlay-postmessage")];
   for (const overlay of overlays) {
-    if (soonest === undefined || soonest >= 60) {
+    if (soonestRemainingSeconds === undefined || soonestRemainingSeconds >= 60) {
       overlay.classList.add("hidden");
       overlay.textContent = "";
     } else {
       overlay.classList.remove("hidden");
-      overlay.textContent = `nav/api expiring in ${soonest}s — Looker refresh window`;
+      overlay.textContent = `nav/api expiring in ${soonestRemainingSeconds}s — Looker refresh window`;
     }
   }
 }
 
-function setTab(tab) {
-  activeTab = tab;
+function selectTab(tab) {
+  selectedTab = tab;
   document.querySelectorAll(".tab").forEach((button) => {
     button.classList.toggle("active", button.dataset.tab === tab);
   });
-  requireElement("stage-sdk").classList.toggle("hidden", tab !== "sdk");
-  requireElement("stage-postmessage").classList.toggle("hidden", tab !== "postmessage");
+  requireElement("stage-embed-sdk").classList.toggle("hidden", tab !== EMBED_SDK_TAB);
+  requireElement("stage-postmessage").classList.toggle("hidden", tab !== POSTMESSAGE_TAB);
   requireElement("tab-caption").textContent =
-    tab === "sdk"
+    tab === EMBED_SDK_TAB
       ? "SDK tab: initCookieless moves tokens for you. Compare with the postMessage tab."
       : "Raw postMessage tab: you will see session:tokens:request and session:tokens in the log.";
 }
 
-async function startActiveTab() {
-  if (activeTab === runningTab) {
+async function startSelectedTab() {
+  if (selectedTab === mountedEmbedTab) {
     return;
   }
-  if (activeTab === "sdk") {
+  if (selectedTab === EMBED_SDK_TAB) {
     stopPostMessageTab();
-    runningTab = "sdk";
+    mountedEmbedTab = EMBED_SDK_TAB;
     startEmbedSdkTab(pageConfig);
     return;
   }
   stopEmbedSdkTab();
-  runningTab = "postmessage";
+  mountedEmbedTab = POSTMESSAGE_TAB;
   await startPostMessageTab(pageConfig);
 }
 
 function initLabUi() {
-  bindSplitPanel();
+  bindWidthSplit();
   bindHeightSplit();
   bindObservatory({
     cards: requireElement("token-cards"),
@@ -164,43 +166,43 @@ function initLabUi() {
     events: requireElement("event-log"),
     catalog: requireElement("method-catalog"),
     freeze: requireElement("toggle-freeze"),
-    ua: requireElement("toggle-ua"),
+    userAgentMismatchToggle: requireElement("toggle-user-agent-mismatch"),
   });
 
   document.querySelectorAll(".tab").forEach((button) => {
     button.addEventListener("click", async () => {
-      setTab(button.dataset.tab);
-      await startActiveTab();
+      selectTab(button.dataset.tab);
+      await startSelectedTab();
     });
   });
 
-  bind("toggle-freeze", "change", async (event) => {
-    await api("/api/lab/controls", {
+  onElementEvent("toggle-freeze", "change", async (event) => {
+    await fetchWithHostAccessToken("/api/lab/controls", {
       method: "POST",
       body: JSON.stringify({ freeze_token_refresh: event.target.checked }),
     });
   });
 
-  bind("toggle-ua", "change", async (event) => {
-    await api("/api/lab/controls", {
+  onElementEvent("toggle-user-agent-mismatch", "change", async (event) => {
+    await fetchWithHostAccessToken("/api/lab/controls", {
       method: "POST",
       body: JSON.stringify({ force_user_agent_mismatch: event.target.checked }),
     });
   });
 
-  bind("btn-drop-ref", "click", async () => {
-    await api("/api/lab/drop-session-reference", { method: "POST" });
+  onElementEvent("btn-drop-session-reference", "click", async () => {
+    await fetchWithHostAccessToken("/api/lab/drop-session-reference", { method: "POST" });
   });
 
-  bind("btn-end-looker", "click", async () => {
-    await api("/api/looker/end-embed-session", { method: "POST" });
+  onElementEvent("btn-end-looker", "click", async () => {
+    await fetchWithHostAccessToken("/api/looker/end-embed-session", { method: "POST" });
     stopEmbedSdkTab();
     stopPostMessageTab();
-    runningTab = null;
-    await startActiveTab();
+    mountedEmbedTab = null;
+    await startSelectedTab();
   });
 
-  setInterval(updateOverlays, 1000);
+  setInterval(updateExpiryCountdownOverlays, 1000);
 }
 
 async function main() {
@@ -214,7 +216,7 @@ async function main() {
 
   try {
     initLabUi();
-    await startActiveTab();
+    await startSelectedTab();
   } catch (error) {
     console.warn("[lab] UI init failed", error.message);
     showLabError(`Lab UI failed to initialize: ${error.message}`);

@@ -10,7 +10,7 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def isoformat(value: datetime | None) -> str | None:
+def utc_isoformat(value: datetime | None) -> str | None:
     if value is None:
         return None
     return value.astimezone(timezone.utc).isoformat()
@@ -32,7 +32,7 @@ class LabEvent:
     def to_public_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
-            "timestamp": isoformat(self.timestamp),
+            "timestamp": utc_isoformat(self.timestamp),
             "actor": self.actor,
             "method": self.method,
             "tokens_in": list(self.tokens_in),
@@ -93,11 +93,11 @@ class HostSession:
     looker_sdk_iframe_started_at: datetime | None = None
     looker_sdk_iframe_expired: bool = False
     looker_sdk_iframe_expired_at: datetime | None = None
-    looker_pm_iframe_started: bool = False
-    looker_pm_iframe_started_at: datetime | None = None
-    looker_pm_iframe_expired: bool = False
-    looker_pm_iframe_expired_at: datetime | None = None
-    host_revoked: bool = False
+    looker_postmessage_iframe_started: bool = False
+    looker_postmessage_iframe_started_at: datetime | None = None
+    looker_postmessage_iframe_expired: bool = False
+    looker_postmessage_iframe_expired_at: datetime | None = None
+    host_session_revoked: bool = False
 
     events: list[LabEvent] = field(default_factory=list)
     refresh_markers: list[dict[str, Any]] = field(default_factory=list)
@@ -105,8 +105,8 @@ class HostSession:
     def record_refresh_marker(self, process: str) -> None:
         self.refresh_markers.append({"at": utc_now(), "process": process})
 
-    def iframe_session_expired(self) -> bool:
-        return self.looker_sdk_iframe_expired or self.looker_pm_iframe_expired
+    def any_iframe_session_expired(self) -> bool:
+        return self.looker_sdk_iframe_expired or self.looker_postmessage_iframe_expired
 
     def mark_iframe_started(self, embed_client: str) -> None:
         now = utc_now()
@@ -118,14 +118,14 @@ class HostSession:
             self.looker_sdk_iframe_expired_at = None
             return
         if embed_client == "postmessage":
-            self.looker_pm_iframe_started = True
-            if self.looker_pm_iframe_started_at is None:
-                self.looker_pm_iframe_started_at = now
-            self.looker_pm_iframe_expired = False
-            self.looker_pm_iframe_expired_at = None
+            self.looker_postmessage_iframe_started = True
+            if self.looker_postmessage_iframe_started_at is None:
+                self.looker_postmessage_iframe_started_at = now
+            self.looker_postmessage_iframe_expired = False
+            self.looker_postmessage_iframe_expired_at = None
 
     def mark_iframe_expired(self, embed_client: str) -> bool:
-        """Apply session:expired only to an iframe that was actually summoned.
+        """Apply session:expired only to an iframe that was actually started.
 
         Returns True if the flag changed. Unborn iframes stay unborn.
         """
@@ -135,10 +135,10 @@ class HostSession:
             if self.looker_sdk_iframe_expired_at is None:
                 self.looker_sdk_iframe_expired_at = now
             return True
-        if embed_client == "postmessage" and self.looker_pm_iframe_started:
-            self.looker_pm_iframe_expired = True
-            if self.looker_pm_iframe_expired_at is None:
-                self.looker_pm_iframe_expired_at = now
+        if embed_client == "postmessage" and self.looker_postmessage_iframe_started:
+            self.looker_postmessage_iframe_expired = True
+            if self.looker_postmessage_iframe_expired_at is None:
+                self.looker_postmessage_iframe_expired_at = now
             return True
         return False
 
@@ -147,21 +147,21 @@ class HostSession:
             self.looker_sdk_iframe_expired = False
             self.looker_sdk_iframe_expired_at = None
             return
-        if embed_client == "postmessage" and self.looker_pm_iframe_started:
-            self.looker_pm_iframe_expired = False
-            self.looker_pm_iframe_expired_at = None
+        if embed_client == "postmessage" and self.looker_postmessage_iframe_started:
+            self.looker_postmessage_iframe_expired = False
+            self.looker_postmessage_iframe_expired_at = None
 
     def clear_iframe_expired(self) -> None:
         self.looker_sdk_iframe_expired = False
         self.looker_sdk_iframe_expired_at = None
-        self.looker_pm_iframe_expired = False
-        self.looker_pm_iframe_expired_at = None
+        self.looker_postmessage_iframe_expired = False
+        self.looker_postmessage_iframe_expired_at = None
 
     def reset_iframe_clients(self) -> None:
         self.looker_sdk_iframe_started = False
         self.looker_sdk_iframe_started_at = None
-        self.looker_pm_iframe_started = False
-        self.looker_pm_iframe_started_at = None
+        self.looker_postmessage_iframe_started = False
+        self.looker_postmessage_iframe_started_at = None
         self.clear_iframe_expired()
 
     def append_event(self, event: LabEvent) -> LabEvent:
@@ -183,19 +183,19 @@ class HostSession:
 
 class SessionStore:
     def __init__(self) -> None:
-        self._by_cookie: dict[str, HostSession] = {}
+        self._sessions_by_id: dict[str, HostSession] = {}
 
-    def put(self, session: HostSession) -> HostSession:
-        self._by_cookie[session.host_session_id] = session
+    def save(self, session: HostSession) -> HostSession:
+        self._sessions_by_id[session.host_session_id] = session
         return session
 
     def get(self, host_session_id: str | None) -> HostSession | None:
         if not host_session_id:
             return None
-        return self._by_cookie.get(host_session_id)
+        return self._sessions_by_id.get(host_session_id)
 
     def delete(self, host_session_id: str) -> HostSession | None:
-        return self._by_cookie.pop(host_session_id, None)
+        return self._sessions_by_id.pop(host_session_id, None)
 
 
-store = SessionStore()
+session_store = SessionStore()

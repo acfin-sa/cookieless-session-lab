@@ -7,21 +7,15 @@ from fastapi.responses import JSONResponse
 from looker_sdk.error import SDKError
 
 from config import LOOKER_MISMATCH_USER_AGENT
-from services.deps import require_bearer_session, request_user_agent
+from services.host_session_auth import require_bearer_session, request_user_agent
 from services.events import log_event
-from services.looker_client import (
-    LookerNotConfigured,
-    LookerSessionDead,
-    acquire_embed_session,
-    end_embed_session,
-    generate_embed_tokens,
-    looker_configured,
-)
+from services import looker_client
+from services.looker_client import LookerNotConfigured, LookerSessionDead, looker_configured
 
 looker_router = APIRouter(prefix="/api/looker", tags=["looker"])
 
 
-def _looker_unreachable(error: Exception) -> bool:
+def is_looker_unreachable(error: Exception) -> bool:
     text = str(getattr(error, "message", None) or error)
     return any(
         token in text
@@ -29,8 +23,8 @@ def _looker_unreachable(error: Exception) -> bool:
     )
 
 
-def _looker_http_error(session, method: str, error: Exception) -> JSONResponse:
-    if _looker_unreachable(error):
+def looker_http_error_response(session, method: str, error: Exception) -> JSONResponse:
+    if is_looker_unreachable(error):
         detail = str(getattr(error, "message", None) or error)
         log_event(
             session,
@@ -75,7 +69,7 @@ def _looker_http_error(session, method: str, error: Exception) -> JSONResponse:
 
 
 @looker_router.post("/acquire-embed-session")
-async def acquire(request: Request):
+async def acquire_embed_session(request: Request):
     # TOKEN: authentication_token, navigation_token, api_token (to browser)
     #        session_reference_token (server only — stripped before this response)
     # CREATED BY: Looker POST /embed/cookieless_session/acquire
@@ -100,14 +94,14 @@ async def acquire(request: Request):
         return JSONResponse({"detail": "Looker is not configured in .env"}, status_code=503)
     user_agent = request_user_agent(request)
     try:
-        payload = await asyncio.to_thread(acquire_embed_session, session, user_agent)
+        payload = await asyncio.to_thread(looker_client.acquire_embed_session, session, user_agent)
     except LookerNotConfigured as error:
         return JSONResponse({"detail": str(error)}, status_code=503)
     except SDKError as error:
-        return _looker_http_error(session, "Looker POST /embed/cookieless_session/acquire", error)
+        return looker_http_error_response(session, "Looker POST /embed/cookieless_session/acquire", error)
     except Exception as error:
-        if _looker_unreachable(error):
-            return _looker_http_error(session, "Looker POST /embed/cookieless_session/acquire", error)
+        if is_looker_unreachable(error):
+            return looker_http_error_response(session, "Looker POST /embed/cookieless_session/acquire", error)
         return JSONResponse({"detail": str(error)}, status_code=502)
     if "session_reference_token" in payload:
         payload = {key: value for key, value in payload.items() if key != "session_reference_token"}
@@ -115,7 +109,7 @@ async def acquire(request: Request):
 
 
 @looker_router.put("/generate-embed-tokens")
-async def generate(request: Request):
+async def generate_embed_tokens(request: Request):
     # TOKEN: navigation_token, api_token
     # CREATED BY: Looker PUT /embed/cookieless_session/generate_tokens
     # CONSUMED BY: postMessage session:tokens
@@ -139,7 +133,7 @@ async def generate(request: Request):
     else:
         user_agent = request_user_agent(request)
     try:
-        payload = await asyncio.to_thread(generate_embed_tokens, session, user_agent)
+        payload = await asyncio.to_thread(looker_client.generate_embed_tokens, session, user_agent)
     except LookerSessionDead as error:
         log_event(
             session,
@@ -161,14 +155,14 @@ async def generate(request: Request):
             status_code=409,
         )
     except SDKError as error:
-        return _looker_http_error(
+        return looker_http_error_response(
             session,
             "Looker PUT /embed/cookieless_session/generate_tokens",
             error,
         )
     except Exception as error:
-        if _looker_unreachable(error):
-            return _looker_http_error(
+        if is_looker_unreachable(error):
+            return looker_http_error_response(
                 session,
                 "Looker PUT /embed/cookieless_session/generate_tokens",
                 error,
@@ -190,7 +184,7 @@ async def generate(request: Request):
 
 
 @looker_router.post("/end-embed-session")
-async def end_session(request: Request):
+async def end_embed_session(request: Request):
     # TOKEN: session_reference_token
     # CREATED BY: acquire
     # CONSUMED BY: Looker DELETE then host copy cleared
@@ -199,11 +193,11 @@ async def end_session(request: Request):
     # WHY: you can kill Layer B without logging the human out of the host app.
     session = require_bearer_session(request)
     try:
-        await asyncio.to_thread(end_embed_session, session, request_user_agent(request))
+        await asyncio.to_thread(looker_client.end_embed_session, session, request_user_agent(request))
     except LookerNotConfigured:
         pass
     except SDKError as error:
-        return _looker_http_error(
+        return looker_http_error_response(
             session,
             "Looker DELETE /embed/cookieless_session/{session_reference_token}",
             error,

@@ -1,6 +1,6 @@
-import { api } from "./host-client.js";
+import { fetchWithHostAccessToken } from "./host-client.js";
 
-const EXPIRING_WINDOW = 60;
+const EXPIRING_WINDOW_SECONDS = 60;
 const TOKEN_HIGHLIGHT_DURATION_MS = 12_000;
 let snapshot = null;
 let methodMap = null;
@@ -28,7 +28,7 @@ function methodListHtml(methods) {
     .join("");
 }
 
-function liveState(token) {
+function currentTokenState(token) {
   if (token.state === "consumed" || token.state === "revoked" || token.state === "expired") {
     return token.state;
   }
@@ -42,7 +42,7 @@ function liveState(token) {
   if (remaining <= 0) {
     return "expired";
   }
-  if (remaining < EXPIRING_WINDOW) {
+  if (remaining < EXPIRING_WINDOW_SECONDS) {
     return "expiring";
   }
   return "alive";
@@ -96,7 +96,7 @@ function formatLifetime(seconds) {
   return `${seconds}s`;
 }
 
-function layerBStatusHtml(iframeSession) {
+function iframeSessionCardHtml(iframeSession) {
   const iframeState = iframeSession?.state || "unborn";
   const iframeLabel = {
     unborn: "not started",
@@ -126,7 +126,7 @@ function renderCards(root) {
   }
   root.innerHTML = "";
   for (const token of snapshot.tokens) {
-    const state = liveState(token);
+    const state = currentTokenState(token);
     const remaining = remainingSeconds(token);
     const card = document.createElement("article");
     card.className = `token-card state-${state}`;
@@ -165,7 +165,7 @@ function renderCards(root) {
   }
   const iframeSessions = snapshot.iframe_sessions || [];
   for (const iframeSession of iframeSessions) {
-    root.insertAdjacentHTML("beforeend", layerBStatusHtml(iframeSession));
+    root.insertAdjacentHTML("beforeend", iframeSessionCardHtml(iframeSession));
   }
   applyTokenHighlights();
 }
@@ -196,7 +196,7 @@ function renderGantt(root) {
   if (!snapshot) {
     return;
   }
-  const t0 = Date.parse(snapshot.login_t0);
+  const t0 = Date.parse(snapshot.login_started_at);
   const now = Date.now();
   const horizon = Math.max(now - t0 + 60_000, 12 * 60_000);
   const rowHeight = 28;
@@ -214,7 +214,7 @@ function renderGantt(root) {
     const expires = token.expires_at ? Date.parse(token.expires_at) : (openEnded ? now : now + 60_000);
     const x1 = x(issued);
     const x2 = Math.max(x1 + 4, x(Math.min(expires, t0 + horizon)));
-    const state = liveState(token);
+    const state = currentTokenState(token);
     const color = {
       alive: "#3dd68c",
       expiring: "#f0b429",
@@ -228,7 +228,7 @@ function renderGantt(root) {
       parts.push(`<rect x="${x1}" y="${y}" width="${x2 - x1}" height="14" rx="3" fill="${color}" opacity="0.85"></rect>`);
     }
     if (token.id === "navigation_token" || token.id === "api_token") {
-      const windowStart = expires - EXPIRING_WINDOW * 1000;
+      const windowStart = expires - EXPIRING_WINDOW_SECONDS * 1000;
       const wx1 = x(windowStart);
       const wx2 = x(expires);
       parts.push(`<rect x="${wx1}" y="${y}" width="${Math.max(0, wx2 - wx1)}" height="14" fill="url(#hatch)"></rect>`);
@@ -376,7 +376,7 @@ export function highlightTokens(tokenIds, durationMs = TOKEN_HIGHLIGHT_DURATION_
   applyTokenHighlights();
 }
 
-export function navApiRemaining() {
+export function remainingNavigationAndApiSeconds() {
   if (!snapshot) {
     return { navigation: null, api: null };
   }
@@ -421,15 +421,15 @@ export function bindObservatory(elements) {
   });
 
   async function poll() {
-    snapshot = await api("/api/lab/snapshot");
+    snapshot = await fetchWithHostAccessToken("/api/lab/snapshot");
     renderCards(elements.cards);
     renderGantt(elements.gantt);
     renderEvents(elements.events);
     if (elements.freeze) {
       elements.freeze.checked = Boolean(snapshot.flags.freeze_token_refresh);
     }
-    if (elements.ua) {
-      elements.ua.checked = Boolean(snapshot.flags.force_user_agent_mismatch);
+    if (elements.userAgentMismatchToggle) {
+      elements.userAgentMismatchToggle.checked = Boolean(snapshot.flags.force_user_agent_mismatch);
     }
   }
 

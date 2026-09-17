@@ -10,21 +10,21 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT_DIR / ".env")
 
 
-def _bool_env(name: str, default: bool = False) -> bool:
+def parse_bool_env(name: str, default: bool = False) -> bool:
     raw = os.getenv(name)
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _csv_env(name: str, default: str = "") -> list[str]:
+def parse_csv_env(name: str, default: str = "") -> list[str]:
     raw = os.getenv(name, default)
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
-def _csv_int_env(name: str, default: str = "") -> list[int]:
+def parse_csv_int_env(name: str, default: str = "") -> list[int]:
     values: list[int] = []
-    for item in _csv_env(name, default):
+    for item in parse_csv_env(name, default):
         values.append(int(item))
     return values
 
@@ -56,16 +56,16 @@ AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "").strip()
 LOOKER_BASE_URL = _normalize_looker_base_url(os.getenv("LOOKER_BASE_URL", ""))
 LOOKER_CLIENT_ID = os.getenv("LOOKER_CLIENT_ID", "")
 LOOKER_CLIENT_SECRET = os.getenv("LOOKER_CLIENT_SECRET", "")
-LOOKER_VERIFY_SSL = _bool_env("LOOKER_VERIFY_SSL", True)
+LOOKER_VERIFY_SSL = parse_bool_env("LOOKER_VERIFY_SSL", True)
 LOOKER_EMBED_HOST = os.getenv("LOOKER_EMBED_HOST", "").rstrip("/")
 LOOKER_EMBED_DASHBOARD_ID = os.getenv("LOOKER_EMBED_DASHBOARD_ID", "").strip()
 
 LOOKER_EMBED_SESSION_LENGTH = int(os.getenv("LOOKER_EMBED_SESSION_LENGTH", "720"))
-LOOKER_EMBED_FORCE_LOGOUT_LOGIN = _bool_env("LOOKER_EMBED_FORCE_LOGOUT_LOGIN", True)
-LOOKER_EMBED_GROUP_IDS = _csv_int_env("LOOKER_EMBED_GROUP_IDS", "1")
+LOOKER_EMBED_FORCE_LOGOUT_LOGIN = parse_bool_env("LOOKER_EMBED_FORCE_LOGOUT_LOGIN", True)
+LOOKER_EMBED_GROUP_IDS = parse_csv_int_env("LOOKER_EMBED_GROUP_IDS", "1")
 LOOKER_EMBED_EXTERNAL_GROUP_ID = os.getenv("LOOKER_EMBED_EXTERNAL_GROUP_ID", "cookieless-lab")
-LOOKER_EMBED_MODELS = _csv_env("LOOKER_EMBED_MODELS", "dw_v3")
-LOOKER_EMBED_PERMISSIONS = _csv_env(
+LOOKER_EMBED_MODELS = parse_csv_env("LOOKER_EMBED_MODELS", "dw_v3")
+LOOKER_EMBED_PERMISSIONS = parse_csv_env(
     "LOOKER_EMBED_PERMISSIONS",
     "access_data,see_looks,see_user_dashboards",
 )

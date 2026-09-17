@@ -3,7 +3,7 @@ let hostAccessExpiresAt = null;
 let refreshTimer = null;
 let userInfo = null;
 
-function decodeExp(token) {
+function decodeJwtExpiryMilliseconds(token) {
   try {
     const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
     return payload.exp ? payload.exp * 1000 : null;
@@ -13,7 +13,7 @@ function decodeExp(token) {
 }
 
 
-async function parseError(response) {
+async function readErrorDetail(response) {
   try {
     const body = await response.json();
     return body.detail || JSON.stringify(body);
@@ -22,7 +22,7 @@ async function parseError(response) {
   }
 }
 
-export async function api(path, options = {}) {
+export async function fetchWithHostAccessToken(path, options = {}) {
   const headers = {
     ...(options.body ? { "content-type": "application/json" } : {}),
     ...(options.headers || {}),
@@ -44,7 +44,7 @@ export async function api(path, options = {}) {
       headers,
     });
     if (!retry.ok) {
-      throw new Error(await parseError(retry));
+      throw new Error(await readErrorDetail(retry));
     }
     if (retry.status === 204) {
       return null;
@@ -52,7 +52,7 @@ export async function api(path, options = {}) {
     return retry.json();
   }
   if (!response.ok) {
-    const error = new Error(await parseError(response));
+    const error = new Error(await readErrorDetail(response));
     error.status = response.status;
     throw error;
   }
@@ -62,12 +62,12 @@ export async function api(path, options = {}) {
   return response.json();
 }
 
-function rememberToken(payload) {
+function storeHostAccessToken(payload) {
   hostAccessToken = payload.host_access_token;
   userInfo = payload.user || userInfo;
   hostAccessExpiresAt = payload.expires_at
     ? Date.parse(payload.expires_at)
-    : decodeExp(hostAccessToken);
+    : decodeJwtExpiryMilliseconds(hostAccessToken);
   scheduleHostRefresh();
 }
 
@@ -90,11 +90,11 @@ export async function bootstrapHostSession() {
     credentials: "same-origin",
   }).then(async (response) => {
     if (!response.ok) {
-      throw new Error(await parseError(response));
+      throw new Error(await readErrorDetail(response));
     }
     return response.json();
   });
-  rememberToken(payload);
+  storeHostAccessToken(payload);
   return payload;
 }
 
@@ -104,17 +104,17 @@ export async function refreshHostAccessToken() {
     credentials: "same-origin",
   }).then(async (response) => {
     if (!response.ok) {
-      throw new Error(await parseError(response));
+      throw new Error(await readErrorDetail(response));
     }
     return response.json();
   });
-  rememberToken(payload);
+  storeHostAccessToken(payload);
   return payload;
 }
 
 export async function reportEvent(event) {
   try {
-    await api("/api/lab/events", {
+    await fetchWithHostAccessToken("/api/lab/events", {
       method: "POST",
       body: JSON.stringify(event),
     });
@@ -122,4 +122,3 @@ export async function reportEvent(event) {
     console.warn("[lab] event log failed", error.message);
   }
 }
-

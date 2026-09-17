@@ -7,7 +7,7 @@ import httpx
 from config import AUTH0_AUDIENCE, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET, AUTH0_DOMAIN
 from services.events import log_event
 from services.host_tokens import apply_auth0_token_set
-from services.store import HostSession
+from services.session_store import HostSession
 
 
 class Auth0RefreshError(Exception):

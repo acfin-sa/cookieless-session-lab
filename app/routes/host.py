@@ -6,18 +6,18 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from services.auth0_client import Auth0RefreshError, refresh_auth0_tokens
-from services.deps import require_cookie_session
+from services.host_session_auth import require_cookie_session
 from services.events import log_event
 from services.host_tokens import mint_host_access_token
-from services.store import isoformat, utc_now
+from services.session_store import utc_isoformat, utc_now
 
 host_router = APIRouter(prefix="/api/host", tags=["host"])
 
 
-def _token_payload(session) -> dict:
+def host_access_token_response(session) -> dict:
     return {
         "host_access_token": session.host_access_token,
-        "expires_at": isoformat(session.host_access_token_expires_at),
+        "expires_at": utc_isoformat(session.host_access_token_expires_at),
         "user": {
             "name": session.display_name(),
             "email": session.email(),
@@ -27,7 +27,7 @@ def _token_payload(session) -> dict:
 
 
 @host_router.post("/bootstrap")
-async def bootstrap(request: Request):
+async def bootstrap_host_access_token(request: Request):
     # TOKEN: host_access_token
     # CREATED BY: mint_host_access_token if the current one is missing or <30s from expiry
     # CONSUMED BY: browser memory; Authorization bearer on later /api calls
@@ -56,11 +56,11 @@ async def bootstrap(request: Request):
         ok=True,
         status_code=200,
     )
-    return _token_payload(session)
+    return host_access_token_response(session)
 
 
 @host_router.post("/refresh")
-async def refresh(request: Request):
+async def refresh_host_access_token(request: Request):
     # TOKEN: host_access_token (out). auth0_refresh (in, server-only)
     # CREATED BY: Auth0 /oauth/token (refresh) then mint_host_access_token
     # CONSUMED BY: previous host_access_token jti is dead
@@ -107,4 +107,4 @@ async def refresh(request: Request):
         ok=True,
         status_code=200,
     )
-    return _token_payload(session)
+    return host_access_token_response(session)

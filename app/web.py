@@ -44,7 +44,7 @@ app.include_router(lab_router)
 
 
 @app.get("/health")
-async def health():
+async def health_check():
     return {
         "ok": True,
         "app": "cookieless-session-lab",

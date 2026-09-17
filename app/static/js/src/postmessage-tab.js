@@ -1,8 +1,8 @@
-import { api, reportEvent } from "./host-client.js";
+import { fetchWithHostAccessToken, reportEvent } from "./host-client.js";
 
 let pageConfig = null;
-let applicationTokens = null;
-let connectedIframes = new WeakSet();
+let browserHeldEmbedTokens = null;
+let connectedIframeWindows = new WeakSet();
 let listenerBound = false;
 let rawIframe = null;
 
@@ -35,7 +35,7 @@ function isRawIframeMessage(event) {
   return Boolean(rawIframe) && event.source === rawIframe.contentWindow;
 }
 
-function parseMessage(event) {
+function parseLookerIframeMessage(event) {
   if (!isRawIframeMessage(event) || event.origin !== lookerOrigin()) {
     return null;
   }
@@ -50,7 +50,7 @@ function parseMessage(event) {
   return data;
 }
 
-function sendTokens(contentWindow, tokens) {
+function postSessionTokensToIframe(contentWindow, tokens) {
   // TOKEN: api_token, navigation_token
   // CREATED BY: acquire (first reply) or generate_tokens (later replies)
   // CONSUMED BY: Looker UI inside the iframe
@@ -68,8 +68,8 @@ function sendTokens(contentWindow, tokens) {
   contentWindow.postMessage(JSON.stringify(message), lookerOrigin());
 }
 
-async function onMessage(event) {
-  const data = parseMessage(event);
+async function handleLookerIframeMessage(event) {
+  const data = parseLookerIframeMessage(event);
   if (!data) {
     return;
   }
@@ -96,9 +96,9 @@ async function onMessage(event) {
     tokens_out: [],
   });
   const iframeWindow = event.source;
-  if (!connectedIframes.has(iframeWindow) && applicationTokens) {
-    connectedIframes.add(iframeWindow);
-    sendTokens(iframeWindow, applicationTokens);
+  if (!connectedIframeWindows.has(iframeWindow) && browserHeldEmbedTokens) {
+    connectedIframeWindows.add(iframeWindow);
+    postSessionTokensToIframe(iframeWindow, browserHeldEmbedTokens);
     await reportRawEvent({
       method: "postMessage session:tokens",
       actor: "Browser",
@@ -109,12 +109,12 @@ async function onMessage(event) {
     return;
   }
   try {
-    const tokens = await api("/api/looker/generate-embed-tokens", {
+    const tokens = await fetchWithHostAccessToken("/api/looker/generate-embed-tokens", {
       method: "PUT",
       body: "{}",
     });
-    applicationTokens = { ...applicationTokens, ...tokens };
-    sendTokens(iframeWindow, applicationTokens);
+    browserHeldEmbedTokens = { ...browserHeldEmbedTokens, ...tokens };
+    postSessionTokensToIframe(iframeWindow, browserHeldEmbedTokens);
     await reportRawEvent({
       method: "postMessage session:tokens",
       actor: "Browser",
@@ -143,7 +143,7 @@ function bindListener() {
   if (listenerBound) {
     return;
   }
-  window.addEventListener("message", onMessage);
+  window.addEventListener("message", handleLookerIframeMessage);
   listenerBound = true;
 }
 
@@ -158,11 +158,11 @@ function createIframe(container, url) {
 }
 
 async function acquireAndMount(container) {
-  const tokens = await api("/api/looker/acquire-embed-session", {
+  const tokens = await fetchWithHostAccessToken("/api/looker/acquire-embed-session", {
     method: "POST",
     body: "{}",
   });
-  applicationTokens = tokens;
+  browserHeldEmbedTokens = tokens;
   const url = cookielessLoginUrl(
     tokens.authentication_token,
     tokens.navigation_token,
@@ -193,11 +193,11 @@ export async function startPostMessageTab(config) {
 
 export function stopPostMessageTab() {
   if (listenerBound) {
-    window.removeEventListener("message", onMessage);
+    window.removeEventListener("message", handleLookerIframeMessage);
     listenerBound = false;
   }
-  applicationTokens = null;
-  connectedIframes = new WeakSet();
+  browserHeldEmbedTokens = null;
+  connectedIframeWindows = new WeakSet();
   rawIframe = null;
   document.getElementById("postmessage-root").innerHTML = "";
 }

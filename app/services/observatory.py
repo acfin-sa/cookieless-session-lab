@@ -5,11 +5,11 @@ from datetime import datetime
 from typing import Any
 
 from config import TOKEN_METHOD_MAP_PATH
-from services.store import HostSession, isoformat, utc_now
+from services.session_store import HostSession, utc_isoformat, utc_now
 
 EXPIRING_WINDOW_SECONDS = 60
 
-TOKEN_VALUES = {
+TOKEN_VALUE_FROM_SESSION = {
     "auth0_refresh": lambda session: session.auth0_refresh_token,
     "auth0_access": lambda session: session.auth0_access_token,
     "host_session_reference": lambda session: session.host_session_reference,
@@ -67,7 +67,7 @@ def _token_times(session: HostSession, token_id: str) -> tuple[datetime | None, 
     return issued, expires
 
 
-def compute_state(
+def compute_token_lifecycle_state(
     *,
     present: bool,
     consumed: bool,
@@ -119,7 +119,7 @@ def _layer_b_token_flags(session: HostSession, token_id: str) -> tuple[bool, boo
     return False, False, False
 
 
-IFRAME_CLIENTS = (
+IFRAME_CLIENT_SPECS = (
     {
         "id": "iframe_session_sdk",
         "name": "Embed SDK iframe",
@@ -133,10 +133,10 @@ IFRAME_CLIENTS = (
     {
         "id": "iframe_session_postmessage",
         "name": "Raw postMessage iframe",
-        "started_attr": "looker_pm_iframe_started",
-        "started_at_attr": "looker_pm_iframe_started_at",
-        "expired_attr": "looker_pm_iframe_expired",
-        "expired_at_attr": "looker_pm_iframe_expired_at",
+        "started_attr": "looker_postmessage_iframe_started",
+        "started_at_attr": "looker_postmessage_iframe_started_at",
+        "expired_attr": "looker_postmessage_iframe_expired",
+        "expired_at_attr": "looker_postmessage_iframe_expired_at",
         "unborn_reason": "unborn — Raw postMessage tab has not been opened",
         "purpose": "Session-level signal for the raw postMessage dashboard iframe. Stays unborn until that tab is opened.",
     },
@@ -184,8 +184,8 @@ def iframe_client_snapshot(session: HostSession, now: datetime, spec: dict[str, 
         "state": state,
         "state_reason": reason,
         "present": state != "unborn",
-        "issued_at": isoformat(issued_at),
-        "expires_at": isoformat(expires_at),
+        "issued_at": utc_isoformat(issued_at),
+        "expires_at": utc_isoformat(expires_at),
         "purpose": spec["purpose"],
     }
 
@@ -198,7 +198,7 @@ def _state_reason(
     if state == "consumed":
         return "used once on /login/embed — not revoked"
     if token_id == "session_reference_token" and state == "alive":
-        if session.iframe_session_expired() and session.looker_session_reference_token:
+        if session.any_iframe_session_expired() and session.looker_session_reference_token:
             return "iframe session expired does not revoke this reference — generate_tokens or re-acquire"
     if token_id == "session_reference_token" and state == "revoked":
         if session.session_reference_dropped:
@@ -224,26 +224,26 @@ def _state_reason(
     return ""
 
 
-def build_snapshot(session: HostSession) -> dict[str, Any]:
+def build_observatory_snapshot(session: HostSession) -> dict[str, Any]:
     method_map = load_method_map()
     now = utc_now()
     tokens = []
     for spec in method_map.get("tokens", []):
         token_id = spec["id"]
-        value = TOKEN_VALUES[token_id](session)
+        value = TOKEN_VALUE_FROM_SESSION[token_id](session)
         issued_at, expires_at = _token_times(session, token_id)
         consumed = False
         revoked = False
         revoked_when_absent = False
         if token_id in {"auth0_refresh", "auth0_access", "host_session_reference", "host_access_token"}:
-            revoked = session.host_revoked
+            revoked = session.host_session_revoked
             revoked_when_absent = True
         else:
             consumed, revoked, revoked_when_absent = _layer_b_token_flags(session, token_id)
         if token_id == "session_reference_token" and session.session_reference_dropped:
             value = None
         created_by, renewed_by, consumed_by = _methods_for_token(method_map, token_id)
-        state = compute_state(
+        state = compute_token_lifecycle_state(
             present=bool(value),
             consumed=consumed,
             revoked=revoked,
@@ -263,8 +263,8 @@ def build_snapshot(session: HostSession) -> dict[str, Any]:
             "state": state,
             "state_reason": _state_reason(token_id, state, session),
             "present": bool(value),
-            "issued_at": isoformat(issued_at),
-            "expires_at": isoformat(expires_at),
+            "issued_at": utc_isoformat(issued_at),
+            "expires_at": utc_isoformat(expires_at),
             "ttl_seconds": ttl_seconds,
             "created_by": created_by,
             "renewed_by": renewed_by,
@@ -272,8 +272,8 @@ def build_snapshot(session: HostSession) -> dict[str, Any]:
         }
         tokens.append(card)
     return {
-        "login_t0": isoformat(session.created_at),
-        "now": isoformat(now),
+        "login_started_at": utc_isoformat(session.created_at),
+        "now": utc_isoformat(now),
         "user": {
             "name": session.display_name(),
             "email": session.email(),
@@ -284,14 +284,14 @@ def build_snapshot(session: HostSession) -> dict[str, Any]:
             "force_user_agent_mismatch": session.force_user_agent_mismatch,
             "session_reference_dropped": session.session_reference_dropped,
             "looker_session_revoked": session.looker_session_revoked,
-            "looker_iframe_session_expired": session.iframe_session_expired(),
+            "any_iframe_session_expired": session.any_iframe_session_expired(),
         },
-        "iframe_sessions": [iframe_client_snapshot(session, now, spec) for spec in IFRAME_CLIENTS],
+        "iframe_sessions": [iframe_client_snapshot(session, now, spec) for spec in IFRAME_CLIENT_SPECS],
         "tokens": tokens,
         "events": [event.to_public_dict() for event in session.events[-120:]],
         "refresh_markers": [
             {
-                "at": isoformat(marker["at"] if isinstance(marker, dict) else marker),
+                "at": utc_isoformat(marker["at"] if isinstance(marker, dict) else marker),
                 "process": marker["process"] if isinstance(marker, dict) else "token renew",
             }
             for marker in session.refresh_markers
