@@ -1,22 +1,22 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
-from services.deps import require_bearer_session
+from services.host_session_auth import require_bearer_session
 from services.events import log_event
-from services.looker_client import drop_session_reference
-from services.observatory import build_snapshot
+from services import looker_client
+from services.observatory import build_observatory_snapshot
 
 lab_router = APIRouter(prefix="/api/lab", tags=["lab"])
 
 
 @lab_router.get("/snapshot")
-async def snapshot(request: Request):
+async def observatory_snapshot(request: Request):
     session = require_bearer_session(request)
-    return build_snapshot(session)
+    return build_observatory_snapshot(session)
 
 
 @lab_router.post("/events")
-async def client_event(request: Request):
+async def record_client_event(request: Request):
     session = require_bearer_session(request)
     body = await request.json()
     method = str(body.get("method") or "client-event")
@@ -33,7 +33,7 @@ async def client_event(request: Request):
     if method in {"session:status", "session:expired"} and (not ok or expired):
         # Session-level “I can’t keep working.” Not “nav died” or “api died.”
         # Do not smash each JWT’s exp — cards follow their own clocks.
-        # Ignore expiry for an iframe that was never summoned (raw postMessage
+        # Ignore expiry for an iframe that was never started (raw postMessage
         # stays unborn until that tab is opened).
         session.mark_iframe_expired(embed_client)
     elif method == "session:status" and ok and not expired:
@@ -53,7 +53,7 @@ async def client_event(request: Request):
 
 
 @lab_router.post("/controls")
-async def controls(request: Request):
+async def update_lab_controls(request: Request):
     session = require_bearer_session(request)
     body = await request.json()
     if "freeze_token_refresh" in body:
@@ -86,7 +86,7 @@ async def controls(request: Request):
 
 
 @lab_router.post("/drop-session-reference")
-async def drop_reference(request: Request):
+async def drop_session_reference(request: Request):
     session = require_bearer_session(request)
-    drop_session_reference(session)
+    looker_client.drop_session_reference(session)
     return {"ok": True, "session_reference_dropped": True}

@@ -8,7 +8,7 @@ import jwt
 from jwt import InvalidTokenError
 
 from config import APP_KEY_SECRET, HOST_ACCESS_TOKEN_TTL_SECONDS
-from services.store import HostSession, utc_now
+from services.session_store import HostSession, utc_now
 
 
 def _timestamp_to_datetime(value: Any) -> datetime | None:

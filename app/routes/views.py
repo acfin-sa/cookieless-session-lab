@@ -18,7 +18,7 @@ from config import (
     SEQUENCE_DIAGRAM_PATH,
     public_url,
 )
-from services.deps import session_from_cookie
+from services.host_session_auth import session_from_cookie
 from services.observatory import load_method_map
 
 templates = Jinja2Templates(
@@ -55,7 +55,7 @@ def _render_architecture_html() -> str:
     return re.sub(r"^<h1>.*?</h1>\s*", "", html, count=1)
 
 
-def _page_config() -> dict:
+def looker_embed_page_config() -> dict:
     return {
         "lookerEmbedHost": LOOKER_EMBED_HOST,
         "lookerDashboardId": LOOKER_EMBED_DASHBOARD_ID,
@@ -66,7 +66,7 @@ def _page_config() -> dict:
 @views_router.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     session = session_from_cookie(request)
-    if session is not None and not session.host_revoked:
+    if session is not None and not session.host_session_revoked:
         return RedirectResponse(url=public_url("/lab"), status_code=302)
     return templates.TemplateResponse(
         request=request,
@@ -83,7 +83,7 @@ async def architecture(request: Request):
         name="architecture.html",
         context={
             "architecture_html": _render_architecture_html(),
-            "logged_in": session is not None and not session.host_revoked,
+            "logged_in": session is not None and not session.host_session_revoked,
             "user_name": session.display_name() if session else None,
             "user_email": session.email() if session else None,
         },
@@ -93,13 +93,13 @@ async def architecture(request: Request):
 @views_router.get("/lab", response_class=HTMLResponse)
 async def lab(request: Request):
     session = session_from_cookie(request)
-    if session is None or session.host_revoked:
+    if session is None or session.host_session_revoked:
         return RedirectResponse(url=public_url("/"), status_code=302)
     return templates.TemplateResponse(
         request=request,
         name="lab.html",
         context={
-            "page_config": _page_config(),
+            "page_config": looker_embed_page_config(),
             "method_map": load_method_map(),
             "user_name": session.display_name(),
             "user_email": session.email(),
@@ -116,7 +116,7 @@ async def sequence(request: Request):
         name="sequence.html",
         context={
             "mermaid_source": mermaid_source,
-            "logged_in": session is not None and not session.host_revoked,
+            "logged_in": session is not None and not session.host_session_revoked,
             "user_name": session.display_name() if session else None,
             "user_email": session.email() if session else None,
         },

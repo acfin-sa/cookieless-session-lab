@@ -1,11 +1,11 @@
 import { getEmbedSDK } from "@looker/embed-sdk";
-import { api, reportEvent } from "./host-client.js";
+import { fetchWithHostAccessToken, reportEvent } from "./host-client.js";
 
 let embedSdk = null;
 let pageConfig = null;
 
 async function acquireSession() {
-  const tokens = await api("/api/looker/acquire-embed-session", { method: "POST", body: "{}" });
+  const tokens = await fetchWithHostAccessToken("/api/looker/acquire-embed-session", { method: "POST", body: "{}" });
   await reportEvent({
     method: "POST /api/looker/acquire-embed-session",
     actor: "Browser",
@@ -23,7 +23,7 @@ async function generateTokens(_tokensFromIframe) {
   // LIVES AT: iframe. The SDK may pass last nav/api here; we ignore them as identity.
   // TTL: ~10 minutes
   // WHY: iframe is an untrusted peer. It may ask; it may not choose the session.
-  const tokens = await api("/api/looker/generate-embed-tokens", {
+  const tokens = await fetchWithHostAccessToken("/api/looker/generate-embed-tokens", {
     method: "PUT",
     body: "{}",
   });

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.store import HostSession, LabEvent
+from services.session_store import HostSession, LabEvent
 
 
 def log_event(

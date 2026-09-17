@@ -6,7 +6,7 @@ from jwt import InvalidTokenError
 
 from config import HOST_SESSION_COOKIE, cookie_secure
 from services.host_tokens import verify_host_access_token
-from services.store import HostSession, store
+from services.session_store import HostSession, session_store
 
 HOST_SESSION_COOKIE_MAX_AGE = 12 * 60 * 60
 
@@ -44,12 +44,12 @@ def clear_host_session_cookie(response: Response) -> None:
 
 
 def session_from_cookie(request: Request) -> HostSession | None:
-    return store.get(request.cookies.get(HOST_SESSION_COOKIE))
+    return session_store.get(request.cookies.get(HOST_SESSION_COOKIE))
 
 
 def require_cookie_session(request: Request) -> HostSession:
     session = session_from_cookie(request)
-    if session is None or session.host_revoked:
+    if session is None or session.host_session_revoked:
         raise HTTPException(status_code=401, detail="No host session. Log in again.")
     return session
 
@@ -65,8 +65,8 @@ def require_bearer_session(request: Request) -> HostSession:
         raise HTTPException(status_code=401, detail=f"Invalid host_access_token: {error}") from error
     if claims.get("typ") != "host_access":
         raise HTTPException(status_code=401, detail="Wrong token type")
-    session = store.get(str(claims.get("hsid") or ""))
-    if session is None or session.host_revoked:
+    session = session_store.get(str(claims.get("hsid") or ""))
+    if session is None or session.host_session_revoked:
         raise HTTPException(status_code=401, detail="Host session is gone. Log in again.")
     if session.host_access_token_jti != claims.get("jti"):
         raise HTTPException(

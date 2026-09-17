@@ -22,9 +22,9 @@ from config import (
     LOOKER_VERIFY_SSL,
 )
 from services.events import log_event
-from services.store import HostSession, utc_now
+from services.session_store import HostSession, utc_now
 
-_sdk = None
+_looker_sdk_client = None
 
 
 class LookerSessionDead(Exception):
@@ -40,18 +40,18 @@ def looker_configured() -> bool:
 
 
 def get_looker_sdk():
-    global _sdk
+    global _looker_sdk_client
     if not looker_configured():
         raise LookerNotConfigured(
             "LOOKER_BASE_URL / LOOKER_CLIENT_ID / LOOKER_CLIENT_SECRET are missing from .env"
         )
-    if _sdk is None:
+    if _looker_sdk_client is None:
         os.environ["LOOKERSDK_BASE_URL"] = LOOKER_BASE_URL
         os.environ["LOOKERSDK_CLIENT_ID"] = LOOKER_CLIENT_ID
         os.environ["LOOKERSDK_CLIENT_SECRET"] = LOOKER_CLIENT_SECRET
         os.environ["LOOKERSDK_VERIFY_SSL"] = "true" if LOOKER_VERIFY_SSL else "false"
-        _sdk = init40()
-    return _sdk
+        _looker_sdk_client = init40()
+    return _looker_sdk_client
 
 
 def embed_user_from_session(session: HostSession) -> dict[str, Any]:
@@ -77,7 +77,7 @@ def embed_user_from_session(session: HostSession) -> dict[str, Any]:
     }
 
 
-def _ttl_expires(ttl: int | None):
+def expiration_from_ttl_seconds(ttl: int | None):
     if ttl is None:
         return None
     return utc_now() + timedelta(seconds=int(ttl))
@@ -139,17 +139,17 @@ def acquire_embed_session(session: HostSession, user_agent: str) -> dict[str, An
     now = utc_now()
     session.looker_session_reference_token = response.session_reference_token
     session.looker_session_reference_issued_at = now
-    session.looker_session_reference_expires_at = _ttl_expires(response.session_reference_token_ttl)
+    session.looker_session_reference_expires_at = expiration_from_ttl_seconds(response.session_reference_token_ttl)
     session.looker_authentication_token = response.authentication_token
     session.looker_authentication_issued_at = now
-    session.looker_authentication_expires_at = _ttl_expires(response.authentication_token_ttl)
+    session.looker_authentication_expires_at = expiration_from_ttl_seconds(response.authentication_token_ttl)
     session.looker_authentication_consumed = False
     session.looker_navigation_token = response.navigation_token
     session.looker_navigation_issued_at = now
-    session.looker_navigation_expires_at = _ttl_expires(response.navigation_token_ttl)
+    session.looker_navigation_expires_at = expiration_from_ttl_seconds(response.navigation_token_ttl)
     session.looker_api_token = response.api_token
     session.looker_api_token_issued_at = now
-    session.looker_api_token_expires_at = _ttl_expires(response.api_token_ttl)
+    session.looker_api_token_expires_at = expiration_from_ttl_seconds(response.api_token_ttl)
     session.session_reference_dropped = False
     session.looker_session_revoked = False
     session.record_refresh_marker("Looker acquire")
@@ -270,13 +270,13 @@ def generate_embed_tokens(session: HostSession, user_agent: str) -> dict[str, An
     now = utc_now()
     if response.session_reference_token:
         session.looker_session_reference_token = response.session_reference_token
-    session.looker_session_reference_expires_at = _ttl_expires(session_ttl)
+    session.looker_session_reference_expires_at = expiration_from_ttl_seconds(session_ttl)
     session.looker_navigation_token = response.navigation_token
     session.looker_navigation_issued_at = now
-    session.looker_navigation_expires_at = _ttl_expires(response.navigation_token_ttl)
+    session.looker_navigation_expires_at = expiration_from_ttl_seconds(response.navigation_token_ttl)
     session.looker_api_token = response.api_token
     session.looker_api_token_issued_at = now
-    session.looker_api_token_expires_at = _ttl_expires(response.api_token_ttl)
+    session.looker_api_token_expires_at = expiration_from_ttl_seconds(response.api_token_ttl)
     session.record_refresh_marker("Looker generate_tokens")
 
     browser_payload = {
