@@ -54,27 +54,13 @@ def get_looker_sdk():
     return _sdk
 
 
-def embed_user_from_session(session: HostSession) -> dict[str, Any]:
+def _embed_display_name(session: HostSession) -> tuple[str, str]:
     claims = session.auth0_claims or {}
     full_name = str(claims.get("name") or "").strip()
     parts = full_name.split(None, 1) if full_name else []
     first_name = parts[0] if parts else str(claims.get("nickname") or "Lab")
     last_name = parts[1] if len(parts) > 1 else "User"
-    return {
-        "external_user_id": session.external_user_id(),
-        "first_name": first_name,
-        "last_name": last_name,
-        "permissions": list(LOOKER_EMBED_PERMISSIONS),
-        "models": list(LOOKER_EMBED_MODELS),
-        "group_ids": list(LOOKER_EMBED_GROUP_IDS),
-        "external_group_id": LOOKER_EMBED_EXTERNAL_GROUP_ID,
-        "user_attributes": {
-            "email": session.email(),
-        },
-        "session_length": LOOKER_EMBED_SESSION_LENGTH,
-        "force_logout_login": LOOKER_EMBED_FORCE_LOGOUT_LOGIN,
-        "embed_domain": APP_BASE_URL,
-    }
+    return first_name, last_name
 
 
 def _ttl_expires(ttl: int | None):
@@ -101,20 +87,20 @@ def acquire_embed_session(session: HostSession, user_agent: str) -> dict[str, An
     # WHY: acquire creates or reattaches identity. Passing the stored reference attaches a new
     #      iframe to the same session. Never return the reference.
     sdk = get_looker_sdk()
-    embed_user = embed_user_from_session(session)
     existing_reference = session.looker_session_reference_token
+    first_name, last_name = _embed_display_name(session)
     body = models.EmbedCookielessSessionAcquire(
-        session_length=int(embed_user["session_length"]),
-        force_logout_login=bool(embed_user["force_logout_login"]),
-        external_user_id=str(embed_user["external_user_id"]),
-        first_name=embed_user["first_name"],
-        last_name=embed_user["last_name"],
-        permissions=list(embed_user["permissions"]),
-        models=list(embed_user["models"]),
-        group_ids=list(embed_user["group_ids"]) or None,
-        external_group_id=embed_user["external_group_id"],
-        user_attributes=dict(embed_user["user_attributes"]),
-        embed_domain=embed_user["embed_domain"],
+        session_length=LOOKER_EMBED_SESSION_LENGTH,
+        force_logout_login=LOOKER_EMBED_FORCE_LOGOUT_LOGIN,
+        external_user_id=session.external_user_id(),
+        first_name=first_name,
+        last_name=last_name,
+        permissions=list(LOOKER_EMBED_PERMISSIONS),
+        models=list(LOOKER_EMBED_MODELS),
+        group_ids=list(LOOKER_EMBED_GROUP_IDS) or None,
+        external_group_id=LOOKER_EMBED_EXTERNAL_GROUP_ID,
+        user_attributes={"email": session.email()},
+        embed_domain=APP_BASE_URL,
         session_reference_token=existing_reference,
     )
     response = sdk.acquire_embed_cookieless_session(

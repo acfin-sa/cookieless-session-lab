@@ -21,6 +21,10 @@ from services.looker_client import (
 looker_router = APIRouter(prefix="/api/looker", tags=["looker"])
 
 
+def browser_safe(payload: dict) -> dict:
+    return {key: value for key, value in payload.items() if key != "session_reference_token"}
+
+
 def _looker_unreachable(error: Exception) -> bool:
     text = str(getattr(error, "message", None) or error)
     return any(
@@ -121,9 +125,7 @@ async def acquire(request: Request):
             error=detail,
         )
         return JSONResponse({"detail": detail}, status_code=502)
-    if "session_reference_token" in payload:
-        payload = {key: value for key, value in payload.items() if key != "session_reference_token"}
-    return payload
+    return browser_safe(payload)
 
 
 @looker_router.put("/generate-embed-tokens")
@@ -200,9 +202,7 @@ async def generate(request: Request):
             error=detail,
         )
         return JSONResponse({"detail": detail}, status_code=502)
-    if "session_reference_token" in payload:
-        payload = {key: value for key, value in payload.items() if key != "session_reference_token"}
-    return payload
+    return browser_safe(payload)
 
 
 @looker_router.post("/end-embed-session")

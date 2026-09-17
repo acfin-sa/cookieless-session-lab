@@ -83,6 +83,16 @@
       "where_after": "Server HostSession. Rotating refresh tokens replace the stored value."
     },
     {
+      "id": "host_bootstrap",
+      "group": "auth0",
+      "kind": "create",
+      "method": "POST /api/host/bootstrap",
+      "direction": "Browser → Host API",
+      "tokens_in": ["host_session_id cookie"],
+      "tokens_out": ["host_access_token"],
+      "where_after": "JSON body → browser memory. Mints a new token if missing or within 30s of expiry; otherwise returns the current one."
+    },
+    {
       "id": "host_refresh",
       "group": "auth0",
       "kind": "renew",

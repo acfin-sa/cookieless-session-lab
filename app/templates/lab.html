@@ -30,8 +30,8 @@
             Force User-Agent mismatch
         </label>
         <span id="freeze-wins-hint" class="hint hidden">Freeze is on — generate_tokens is not called, so User-Agent mismatch will not fire.</span>
-        <button type="button" title="POST /api/lab/drop-session-reference" id="btn-drop-ref">Drop session_reference on server</button>
-        <button type="button" title="POST /api/looker/end-embed-session" id="btn-end-looker">End Looker session</button>
+        <button type="button" title="Host forgets session_reference_token. Looker session still exists until TTL, but generate_tokens cannot run." id="btn-drop-ref">Drop session_reference on server</button>
+        <button type="button" title="Deletes the Looker cookieless session. Host login (Layer A) stays valid." id="btn-end-looker">End Looker session</button>
     </section>
 
     <div class="lab-split">
