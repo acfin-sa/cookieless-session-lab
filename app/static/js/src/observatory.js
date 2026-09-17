@@ -63,8 +63,15 @@ function formatClock(seconds) {
   if (seconds === null) {
     return "no exp";
   }
-  const minutes = Math.floor(seconds / 60);
-  const rest = String(seconds % 60).padStart(2, "0");
+  const total = Math.max(0, Math.floor(seconds));
+  if (total >= 3600) {
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const rest = total % 60;
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+  }
+  const minutes = Math.floor(total / 60);
+  const rest = String(total % 60).padStart(2, "0");
   return `${minutes}:${rest}`;
 }
 
@@ -107,6 +114,19 @@ function formatLifetime(seconds) {
     return `${Math.floor(seconds / 60)}m`;
   }
   return `${seconds}s`;
+}
+
+function tokenCardTtlMetaLabel(state, remaining, lifetime) {
+  if (state === "expiring" && remaining !== null) {
+    return `expires in ${formatClock(remaining)}`;
+  }
+  if (lifetime === null) {
+    return "no expiry";
+  }
+  if (state === "alive") {
+    return `alive for ${formatLifetime(lifetime)}`;
+  }
+  return `lives for ${formatLifetime(lifetime)}`;
 }
 
 function iframeSessionCardHtml(iframeSession) {
@@ -159,15 +179,9 @@ function renderCards(root) {
         <h3>${token.name}</h3>
       </header>
       <div class="storage">Stored in <code>${token.storage}</code>.${token.purpose ? ` ${escapeHtml(token.purpose)}` : ""}</div>
-      <div class="meta">
-        <span>issued at ${token.issued_at ? new Date(token.issued_at).toLocaleTimeString() : "—"}</span>
-        <span>${lifetime !== null ? `lives for ${formatLifetime(lifetime)}` : "no expiry"}</span>
-      </div>
+      <div class="meta"><span>issued at ${token.issued_at ? new Date(token.issued_at).toLocaleTimeString() : "—"} · ${tokenCardTtlMetaLabel(state, remaining, lifetime)}</span></div>
       <div class="ttl-bar"><div class="ttl-fill" title="TTL" style="width:${ttlWidth}%"></div></div>
-      <div class="state">
-        <span>${state}</span>
-        ${remaining !== null ? `<span>${formatClock(remaining)}</span>` : ""}
-      </div>
+      <div class="state"><span>${state}${remaining !== null ? ` · ${formatClock(remaining)}` : ""}</span></div>
       ${reason}
       <dl>
         <dt>Created by:</dt><dd>${methodListHtml(token.created_by)}</dd>
@@ -235,6 +249,11 @@ function tokenLaneId(token) {
     return "host";
   }
   return "looker";
+}
+
+function isLookerTokenId(tokenId) {
+  const token = (snapshot.tokens || []).find((item) => item.id === tokenId);
+  return Boolean(token) && tokenLaneId(token) === "looker";
 }
 
 function ganttLaneRows(laneId) {
@@ -373,6 +392,33 @@ function clearBarLabelTimer() {
   }
 }
 
+function ganttPopupLabelHtml(text, leftPercent) {
+  const clampedPreferred = Math.min(100, Math.max(0, leftPercent));
+  return `<div class="gantt-popup-label" data-preferred-left="${clampedPreferred}" style="left:${clampedPreferred}%">${escapeHtml(text)}</div>`;
+}
+
+function clampGanttPopupLabels(root) {
+  const edgePadding = 6;
+  const containerWidth = root.clientWidth;
+  if (containerWidth <= 0) {
+    return;
+  }
+  root.querySelectorAll(".gantt-popup-label").forEach((label) => {
+    const preferredPercent = Number(label.dataset.preferredLeft);
+    const preferredLeft = Number.isFinite(preferredPercent)
+      ? (preferredPercent / 100) * containerWidth
+      : containerWidth / 2;
+    label.style.left = `${preferredLeft}px`;
+    label.style.transform = "translateX(-50%)";
+    const labelWidth = label.offsetWidth;
+    const halfWidth = labelWidth / 2;
+    const minCenter = edgePadding + halfWidth;
+    const maxCenter = Math.max(minCenter, containerWidth - edgePadding - halfWidth);
+    const clampedCenter = Math.min(maxCenter, Math.max(minCenter, preferredLeft));
+    label.style.left = `${clampedCenter}px`;
+  });
+}
+
 function renderGantt(root) {
   if (!snapshot) {
     return;
@@ -449,7 +495,7 @@ function renderGantt(root) {
     const at = openMarker.at || openMarker;
     const process = openMarker.process || "token renew";
     const leftPercent = (x(Date.parse(at)) / width) * 100;
-    parts.push(`<div class="gantt-popup-label" style="left:${leftPercent}%">${escapeHtml(process)}</div>`);
+    parts.push(ganttPopupLabelHtml(process, leftPercent));
   } else {
     refreshLabelIndex = null;
   }
@@ -460,12 +506,22 @@ function renderGantt(root) {
     if (range) {
       const midX = x((range.start + range.end) / 2);
       const leftPercent = (midX / width) * 100;
-      parts.push(`<div class="gantt-popup-label" style="left:${leftPercent}%">${escapeHtml(ganttBarLabelText(openBarToken))}</div>`);
+      parts.push(ganttPopupLabelHtml(ganttBarLabelText(openBarToken), leftPercent));
     }
   } else {
     barLabelTokenId = null;
   }
   root.innerHTML = parts.join("");
+  clampGanttPopupLabels(root);
+}
+
+function isLookerEvent(event) {
+  const method = String(event.method || "");
+  if (method.startsWith("postMessage") || method.startsWith("iframe navigation")) {
+    return false;
+  }
+  const tokenIds = [...(event.tokens_in || []), ...(event.tokens_out || [])];
+  return tokenIds.some(isLookerTokenId);
 }
 
 // live event log table
@@ -477,7 +533,7 @@ function renderEvents(root) {
   const events = [...(snapshot.events || [])].reverse();
   for (const event of events) {
     const row = document.createElement("div");
-    row.className = `event-row${event.ok ? "" : " fail"}${event.id === selectedEventId ? " active" : ""}`;
+    row.className = `event-row${isLookerEvent(event) ? " looker" : ""}${event.ok ? "" : " fail"}${event.id === selectedEventId ? " active" : ""}`;
     row.dataset.eventId = event.id;
     row.dataset.tokens = [...(event.tokens_in || []), ...(event.tokens_out || [])].join(",");
     const when = event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : "";

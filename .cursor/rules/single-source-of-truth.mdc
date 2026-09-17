@@ -1,0 +1,12 @@
+---
+description: Prefer one source of truth; do not duplicate classification or identity lists
+alwaysApply: true
+---
+
+# Single source of truth
+
+When two surfaces answer the same question (what is a Looker token, which methods move a token, how a clock is computed), reuse the existing function or catalog. Do not copy ids, labels, or branching into a second list.
+
+- Derive, don't duplicate. A consumer may add a local exclusion (example: event log skips postMessage / iframe navigation) but must not restate the shared identity rule.
+- Prefer `tokenLaneId`, `docs/token-method-map.json`, and server snapshot fields over hardcoded token-id sets.
+- If a new copy appears, delete it and call the original. Keep the tree lean.
