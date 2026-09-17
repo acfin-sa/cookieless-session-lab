@@ -52,6 +52,11 @@ function reportEmbedSessionExpired(method, summary) {
   });
 }
 
+const COLD_START_DASHBOARD_FILTERS = {
+  Periodo: "2 months",
+  Gestor: "CORIL",
+};
+
 function mountDashboard(containerSelector) {
   if (!embedSdk) {
     embedSdk = getEmbedSDK();
@@ -62,7 +67,8 @@ function mountDashboard(containerSelector) {
     .appendTo(containerSelector)
     .withParams({
       embed_domain: pageConfig.embedDomain,
-    });
+    })
+    .withFilters(COLD_START_DASHBOARD_FILTERS);
   builder
     .on("session:status", (event) => {
       if (event?.expired) {
