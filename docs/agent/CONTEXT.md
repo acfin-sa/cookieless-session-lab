@@ -37,6 +37,12 @@ Auth0 proves the human
 
 `host_session_reference` is pedagogical. It is not sent to Auth0 or Looker.
 
+`host_access_token` is a **Host** badge on `/lab`, not Auth0 and not Looker. It
+is minted by `mint_host_access_token` and sent as `Authorization: Bearer` on
+`/api/looker/*` and `/api/lab/*` so Layer A can gate Layer B. Looker identity
+remains `session_reference_token`. Observatory `badge` comes from
+`docs/token-method-map.json`; do not map every Layer A card to the word Auth0.
+
 ### Layer B (Looker — four tokens)
 
 | Token | Role | Storage | Browser JSON |

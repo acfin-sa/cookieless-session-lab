@@ -10,6 +10,10 @@ let highlightUntil = 0;
 let refreshLabelIndex = null;
 let refreshLabelUntil = 0;
 let refreshLabelTimer = null;
+let barLabelTokenId = null;
+let barLabelUntil = 0;
+let barLabelTimer = null;
+const GANTT_POPUP_DURATION_MS = 3000;
 
 function escapeHtml(value) {
   return String(value)
@@ -64,14 +68,23 @@ function formatClock(seconds) {
   return `${minutes}:${rest}`;
 }
 
-function layerLabel(layer) {
-  if (layer === "A") {
-    return "Auth0";
+function tokenBadge(token) {
+  if (token.badge) {
+    return token.badge;
   }
-  if (layer === "B") {
+  if (token.layer === "B") {
     return "Looker";
   }
-  return `${layer} Layer`;
+  if (String(token.id || "").startsWith("auth0_")) {
+    return "Auth0";
+  }
+  if (String(token.id || "").startsWith("host_")) {
+    return "Host";
+  }
+  if (token.layer === "A") {
+    return "Host";
+  }
+  return `${token.layer} Layer`;
 }
 
 function tokenLifetimeSeconds(token) {
@@ -128,20 +141,21 @@ function renderCards(root) {
   for (const token of snapshot.tokens) {
     const state = currentTokenState(token);
     const remaining = remainingSeconds(token);
+    const lifetime = tokenLifetimeSeconds(token);
+    const originalTtl = token.ttl_seconds || lifetime;
+    const ttlRatio = remaining === null || !originalTtl
+      ? (token.present ? 1 : 0)
+      : Math.min(1, remaining / Math.max(originalTtl, 1));
     const card = document.createElement("article");
     card.className = `token-card state-${state}`;
     card.dataset.token = token.id;
-    const ttlRatio = remaining === null || !token.ttl_seconds
-      ? (token.present ? 1 : 0)
-      : Math.min(1, remaining / Math.max(token.ttl_seconds, remaining, 1));
     const ttlWidth = state === "expired" || state === "revoked" || state === "consumed" ? 100 : Math.round(ttlRatio * 100);
-    const lifetime = tokenLifetimeSeconds(token);
     const reason = token.state_reason
       ? `<p class="state-reason">${escapeHtml(token.state_reason)}</p>`
       : "";
     card.innerHTML = `
       <header>
-        <span class="layer">${layerLabel(token.layer)}</span>
+        <span class="layer">${escapeHtml(tokenBadge(token))}</span>
         <h3>${token.name}</h3>
       </header>
       <div class="storage">Stored in <code>${token.storage}</code>.${token.purpose ? ` ${escapeHtml(token.purpose)}` : ""}</div>
@@ -187,8 +201,15 @@ const GANTT_LANES = [
     emphasized: false,
   },
   {
-    id: "embed-sdk",
-    label: "Looker Embed SDK",
+    id: "host",
+    label: "Host",
+    fill: "#161b24",
+    labelFill: "#8b97ab",
+    emphasized: false,
+  },
+  {
+    id: "looker",
+    label: "Looker",
     fill: "#1a283c",
     labelFill: "#6cb6ff",
     emphasized: true,
@@ -206,10 +227,14 @@ function tokenLaneId(token) {
   if (String(token.id || "").startsWith("iframe_session")) {
     return "iframe";
   }
-  if (token.layer === "A") {
+  const badge = tokenBadge(token);
+  if (badge === "Auth0") {
     return "auth0";
   }
-  return "embed-sdk";
+  if (badge === "Host") {
+    return "host";
+  }
+  return "looker";
 }
 
 function ganttLaneRows(laneId) {
@@ -252,6 +277,84 @@ function ganttLaneLayout() {
   return { lanes, height: y - laneGap + 6, laneGap };
 }
 
+function ganttBarRange(token, horizonEndMs) {
+  if (!token.issued_at) {
+    return null;
+  }
+  if (!token.present && token.state === "unborn") {
+    return null;
+  }
+  const start = Date.parse(token.issued_at);
+  if (Number.isNaN(start)) {
+    return null;
+  }
+  let end = null;
+  if (token.expires_at) {
+    end = Date.parse(token.expires_at);
+  } else if (token.planned_expires_at) {
+    end = Date.parse(token.planned_expires_at);
+  }
+  if (end === null || Number.isNaN(end)) {
+    return null;
+  }
+  const clippedEnd = Math.min(end, horizonEndMs);
+  return {
+    start,
+    end: Math.max(start, clippedEnd),
+    hatchEnd: end,
+  };
+}
+
+function findGanttToken(tokenId) {
+  if (!snapshot || !tokenId) {
+    return null;
+  }
+  const fromTokens = (snapshot.tokens || []).find((token) => token.id === tokenId);
+  if (fromTokens) {
+    return fromTokens;
+  }
+  const fromIframes = (snapshot.iframe_sessions || []).find((token) => token.id === tokenId);
+  if (fromIframes) {
+    return fromIframes;
+  }
+  if (snapshot.iframe_session && snapshot.iframe_session.id === tokenId) {
+    return snapshot.iframe_session;
+  }
+  return null;
+}
+
+function ganttRemainingSeconds(token) {
+  const fromExpires = remainingSeconds(token);
+  if (fromExpires !== null) {
+    return fromExpires;
+  }
+  if (!token.planned_expires_at) {
+    return null;
+  }
+  return Math.max(0, Math.floor((Date.parse(token.planned_expires_at) - Date.now()) / 1000));
+}
+
+function ganttBarLabelText(token) {
+  const state = currentTokenState(token);
+  const remaining = ganttRemainingSeconds(token);
+  const ttlPart = remaining === null ? "no TTL" : formatClock(remaining);
+  return `${token.name || token.id}: ${state} · ${ttlPart}`;
+}
+
+function clearRefreshLabelTimer() {
+  if (refreshLabelTimer) {
+    clearTimeout(refreshLabelTimer);
+    refreshLabelTimer = null;
+  }
+}
+
+function clearBarLabelTimer() {
+  if (barLabelTimer) {
+    clearTimeout(barLabelTimer);
+    barLabelTimer = null;
+  }
+}
+
 function renderGantt(root) {
   if (!snapshot) {
     return;
@@ -259,12 +362,13 @@ function renderGantt(root) {
   const t0 = Date.parse(snapshot.login_started_at);
   const now = Date.now();
   const horizon = Math.max(now - t0 + 60_000, 12 * 60_000);
+  const horizonEndMs = t0 + horizon;
   const left = 196;
   const width = 720;
   const { lanes, height, laneGap } = ganttLaneLayout();
   const x = (ms) => left + ((ms - t0) / horizon) * (width - left - 16);
   const parts = [];
-  parts.push(`<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" role="img" aria-label="Lifetime swimlane with Auth0, Looker Embed SDK, and iframe lanes">`);
+  parts.push(`<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" role="img" aria-label="Lifetime swimlane with Auth0, Host, Looker, and iframe lanes">`);
   parts.push(`
     <defs>
       <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
@@ -285,11 +389,6 @@ function renderGantt(root) {
     parts.push(`<text x="${labelX}" y="${lane.top + lane.headerHeight - 5}" fill="${lane.labelFill}" font-size="${lane.emphasized ? 12 : 10}" font-weight="700">${escapeHtml(lane.label)}</text>`);
     lane.rows.forEach((token, index) => {
       const y = lane.contentTop + index * lane.rowHeight + (lane.rowHeight - 14) / 2;
-      const issued = token.issued_at ? Date.parse(token.issued_at) : t0;
-      const openEnded = String(token.id || "").startsWith("iframe_session") && !token.expires_at && token.state === "alive";
-      const expires = token.expires_at ? Date.parse(token.expires_at) : (openEnded ? now : now + 60_000);
-      const x1 = x(issued);
-      const x2 = Math.max(x1 + 4, x(Math.min(expires, t0 + horizon)));
       const state = currentTokenState(token);
       const color = {
         alive: "#3dd68c",
@@ -300,14 +399,17 @@ function renderGantt(root) {
         unborn: "#5b6578",
       }[state];
       parts.push(`<text x="10" y="${y + 11}" fill="#c5cedb" font-size="11">${escapeHtml(token.name || token.id)}</text>`);
-      if (token.present || token.state !== "unborn") {
-        parts.push(`<rect x="${x1}" y="${y}" width="${x2 - x1}" height="14" rx="3" fill="${color}" opacity="0.85"></rect>`);
-      }
-      if (token.id === "navigation_token" || token.id === "api_token") {
-        const windowStart = expires - EXPIRING_WINDOW_SECONDS * 1000;
-        const wx1 = x(windowStart);
-        const wx2 = x(expires);
-        parts.push(`<rect x="${wx1}" y="${y}" width="${Math.max(0, wx2 - wx1)}" height="14" fill="url(#hatch)"></rect>`);
+      const range = ganttBarRange(token, horizonEndMs);
+      if (range) {
+        const x1 = x(range.start);
+        const x2 = Math.max(x1 + 4, x(range.end));
+        parts.push(`<rect class="gantt-bar-hit" data-bar-token-id="${escapeHtml(token.id)}" x="${x1}" y="${y}" width="${x2 - x1}" height="14" rx="3" fill="${color}" opacity="0.85" cursor="pointer"></rect>`);
+        if ((token.id === "navigation_token" || token.id === "api_token") && token.expires_at) {
+          const windowStart = range.hatchEnd - EXPIRING_WINDOW_SECONDS * 1000;
+          const wx1 = x(windowStart);
+          const wx2 = x(Math.min(range.hatchEnd, horizonEndMs));
+          parts.push(`<rect x="${wx1}" y="${y}" width="${Math.max(0, wx2 - wx1)}" height="14" fill="url(#hatch)" pointer-events="none"></rect>`);
+        }
       }
     });
   }
@@ -323,15 +425,27 @@ function renderGantt(root) {
   const nowX = x(now);
   parts.push(`<line x1="${nowX}" x2="${nowX}" y1="${chartTop}" y2="${chartBottom}" stroke="#e8eef7" pointer-events="none"></line>`);
   parts.push("</svg>");
-  const labelStillOpen = refreshLabelIndex !== null && Date.now() < refreshLabelUntil;
-  const openMarker = labelStillOpen ? (snapshot.refresh_markers || [])[refreshLabelIndex] : null;
+  const refreshLabelStillOpen = refreshLabelIndex !== null && Date.now() < refreshLabelUntil;
+  const openMarker = refreshLabelStillOpen ? (snapshot.refresh_markers || [])[refreshLabelIndex] : null;
   if (openMarker) {
     const at = openMarker.at || openMarker;
     const process = openMarker.process || "token renew";
     const leftPercent = (x(Date.parse(at)) / width) * 100;
-    parts.push(`<div class="gantt-refresh-label" style="left:${leftPercent}%">${escapeHtml(process)}</div>`);
+    parts.push(`<div class="gantt-popup-label" style="left:${leftPercent}%">${escapeHtml(process)}</div>`);
   } else {
     refreshLabelIndex = null;
+  }
+  const barLabelStillOpen = barLabelTokenId !== null && Date.now() < barLabelUntil;
+  const openBarToken = barLabelStillOpen ? findGanttToken(barLabelTokenId) : null;
+  if (openBarToken) {
+    const range = ganttBarRange(openBarToken, horizonEndMs);
+    if (range) {
+      const midX = x((range.start + range.end) / 2);
+      const leftPercent = (midX / width) * 100;
+      parts.push(`<div class="gantt-popup-label" style="left:${leftPercent}%">${escapeHtml(ganttBarLabelText(openBarToken))}</div>`);
+    }
+  } else {
+    barLabelTokenId = null;
   }
   root.innerHTML = parts.join("");
 }
@@ -365,6 +479,7 @@ const CATALOG_COLUMN_COUNT = 6;
 // iframe_embed_login is the shared /login/embed navigation — also listed once under EmbedSDK.
 const CATALOG_GROUPS = [
   { id: "auth0", label: "Auth0" },
+  { id: "host", label: "Host" },
   { id: "embed-sdk", label: "Embed SDK" },
   { id: "raw-iframe", label: "Raw iFrame" },
 ];
@@ -475,20 +590,37 @@ export function bindObservatory(elements) {
   });
 
   elements.gantt.addEventListener("click", (event) => {
+    const barHit = event.target.closest("[data-bar-token-id]");
+    if (barHit) {
+      clearRefreshLabelTimer();
+      refreshLabelIndex = null;
+      refreshLabelUntil = 0;
+      barLabelTokenId = barHit.dataset.barTokenId;
+      barLabelUntil = Date.now() + GANTT_POPUP_DURATION_MS;
+      clearBarLabelTimer();
+      barLabelTimer = setTimeout(() => {
+        barLabelTokenId = null;
+        barLabelUntil = 0;
+        renderGantt(elements.gantt);
+      }, GANTT_POPUP_DURATION_MS);
+      renderGantt(elements.gantt);
+      return;
+    }
     const hit = event.target.closest("[data-refresh-index]");
     if (!hit) {
       return;
     }
+    clearBarLabelTimer();
+    barLabelTokenId = null;
+    barLabelUntil = 0;
     refreshLabelIndex = Number(hit.dataset.refreshIndex);
-    refreshLabelUntil = Date.now() + 3000;
-    if (refreshLabelTimer) {
-      clearTimeout(refreshLabelTimer);
-    }
+    refreshLabelUntil = Date.now() + GANTT_POPUP_DURATION_MS;
+    clearRefreshLabelTimer();
     refreshLabelTimer = setTimeout(() => {
       refreshLabelIndex = null;
       refreshLabelUntil = 0;
       renderGantt(elements.gantt);
-    }, 3000);
+    }, GANTT_POPUP_DURATION_MS);
     renderGantt(elements.gantt);
   });
 

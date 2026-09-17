@@ -152,6 +152,10 @@ a.btn { text-decoration: none; display: inline-block; }
   flex-shrink: 0;
 }
 .toggle { display: flex; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
+.controls-hint {
+  flex-basis: 100%;
+  margin: 0.15rem 0 0;
+}
 
 .lab-grid {
   display: flex;
@@ -341,6 +345,7 @@ a.btn { text-decoration: none; display: inline-block; }
 
 .gantt { position: relative; overflow-x: auto; background: #10141c; border: 1px solid var(--line); border-radius: 8px; }
 .gantt svg { display: block; min-width: 640px; }
+.gantt-popup-label,
 .gantt-refresh-label {
   position: absolute;
   top: 4px;

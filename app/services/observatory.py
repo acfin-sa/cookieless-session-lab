@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from config import TOKEN_METHOD_MAP_PATH
+from services.host_session_auth import HOST_SESSION_COOKIE_MAX_AGE
 from services.session_store import HostSession, utc_isoformat, utc_now
 
 EXPIRING_WINDOW_SECONDS = 60
@@ -45,7 +46,7 @@ def _methods_for_token(
 
 def _token_times(session: HostSession, token_id: str) -> tuple[datetime | None, datetime | None]:
     issued = {
-        "auth0_refresh": session.created_at,
+        "auth0_refresh": session.auth0_refresh_issued_at or session.created_at,
         "auth0_access": session.auth0_access_issued_at,
         "host_session_reference": session.created_at,
         "host_access_token": session.host_access_token_issued_at,
@@ -119,6 +120,33 @@ def _layer_b_token_flags(session: HostSession, token_id: str) -> tuple[bool, boo
     return False, False, False
 
 
+def _host_session_envelope_end(session: HostSession) -> datetime:
+    return session.created_at + timedelta(seconds=HOST_SESSION_COOKIE_MAX_AGE)
+
+
+def _iframe_planned_expires_at(session: HostSession) -> datetime | None:
+    """Alive iframe bar end: a planned clock, never snapshot `now`.
+
+    generate_tokens is what keeps the iframe working past the current nav/api
+    JWTs. Freeze skips Looker rotate; User-Agent mismatch makes the next
+    generate fail. Either way the usable envelope is the current nav/api exp.
+    Otherwise the ceiling is Layer B identity (session_reference_token TTL).
+    """
+    refresh_blocked = session.freeze_token_refresh or session.force_user_agent_mismatch
+    if refresh_blocked:
+        jwt_ends = [
+            moment
+            for moment in (
+                session.looker_navigation_expires_at,
+                session.looker_api_token_expires_at,
+            )
+            if moment is not None
+        ]
+        if jwt_ends:
+            return min(jwt_ends)
+    return session.looker_session_reference_expires_at
+
+
 IFRAME_CLIENT_SPECS = (
     {
         "id": "iframe_session_sdk",
@@ -143,7 +171,7 @@ IFRAME_CLIENT_SPECS = (
 )
 
 
-def iframe_client_snapshot(session: HostSession, now: datetime, spec: dict[str, str]) -> dict[str, Any]:
+def iframe_client_snapshot(session: HostSession, _now: datetime, spec: dict[str, str]) -> dict[str, Any]:
     """Per-iframe Layer B row for the 'I can't keep working' signal.
 
     This is not navigation_token and not api_token. Those cards keep their own exp.
@@ -153,6 +181,7 @@ def iframe_client_snapshot(session: HostSession, now: datetime, spec: dict[str, 
     expired = bool(getattr(session, spec["expired_attr"]))
     started_at = getattr(session, spec["started_at_attr"])
     expired_at = getattr(session, spec["expired_at_attr"])
+    planned_expires_at = None
     if not started:
         state = "unborn"
         expires_at = None
@@ -161,21 +190,32 @@ def iframe_client_snapshot(session: HostSession, now: datetime, spec: dict[str, 
     elif expired:
         state = "expired"
         issued_at = started_at
-        expires_at = expired_at or now
+        expires_at = expired_at
         reason = (
             "iframe session expired — embed cannot keep working "
-            "(session:expired / expired session:status). Not a nav or api JWT clock."
+            "(session:expired / expired session:status)."
         )
     elif session.looker_session_revoked:
         state = "revoked"
         issued_at = started_at
-        expires_at = now
+        expires_at = session.looker_session_revoked_at
         reason = "Layer B identity ended (ttl==0 or End Looker)."
     else:
         state = "alive"
         issued_at = started_at
         expires_at = None
-        reason = "iframe has not reported session:expired."
+        planned_expires_at = _iframe_planned_expires_at(session)
+        if session.freeze_token_refresh or session.force_user_agent_mismatch:
+            reason = (
+                "iframe has not reported session:expired. "
+                "generate_tokens cannot rotate."
+                "This row ends when the current JWTs expire."
+            )
+        else:
+            reason = (
+                "iframe has not reported session:expired. "
+                "envelope (session_reference_token TTL)"
+            )
     return {
         "id": spec["id"],
         "name": spec["name"],
@@ -186,6 +226,7 @@ def iframe_client_snapshot(session: HostSession, now: datetime, spec: dict[str, 
         "present": state != "unborn",
         "issued_at": utc_isoformat(issued_at),
         "expires_at": utc_isoformat(expires_at),
+        "planned_expires_at": utc_isoformat(planned_expires_at),
         "purpose": spec["purpose"],
     }
 
@@ -251,20 +292,43 @@ def build_observatory_snapshot(session: HostSession) -> dict[str, Any]:
             now=now,
             revoked_when_absent=revoked_when_absent,
         )
+        display_expires_at = expires_at
+        planned_expires_at = None
+        if (
+            token_id == "authentication_token"
+            and consumed
+            and session.looker_authentication_consumed_at is not None
+        ):
+            display_expires_at = session.looker_authentication_consumed_at
+        if (
+            token_id == "session_reference_token"
+            and session.session_reference_dropped
+            and session.session_reference_dropped_at is not None
+        ):
+            display_expires_at = session.session_reference_dropped_at
+        if (
+            display_expires_at is None
+            and token_id in {"auth0_refresh", "host_session_reference"}
+            and value
+        ):
+            planned_expires_at = _host_session_envelope_end(session)
+        lifetime_end = display_expires_at or planned_expires_at
         ttl_seconds = None
-        if expires_at is not None:
-            ttl_seconds = max(0, int((expires_at - now).total_seconds()))
+        if issued_at is not None and lifetime_end is not None:
+            ttl_seconds = max(0, int((lifetime_end - issued_at).total_seconds()))
         card = {
             "id": token_id,
             "name": spec["name"],
             "layer": spec["layer"],
+            "badge": spec.get("badge") or ("Looker" if spec.get("layer") == "B" else "Host"),
             "storage": spec["storage"],
             "purpose": spec.get("purpose") or "",
             "state": state,
             "state_reason": _state_reason(token_id, state, session),
             "present": bool(value),
             "issued_at": utc_isoformat(issued_at),
-            "expires_at": utc_isoformat(expires_at),
+            "expires_at": utc_isoformat(display_expires_at),
+            "planned_expires_at": utc_isoformat(planned_expires_at),
             "ttl_seconds": ttl_seconds,
             "created_by": created_by,
             "renewed_by": renewed_by,

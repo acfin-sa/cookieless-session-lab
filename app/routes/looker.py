@@ -118,7 +118,9 @@ async def generate_embed_tokens(request: Request):
     # WHY: the iframe is an untrusted peer. It may ask for tokens; it may not mint them
     #      or tell us which session_reference to use. Body nav/api are ignored for identity.
     session = require_bearer_session(request)
-    if session.force_user_agent_mismatch:
+    if session.freeze_token_refresh:
+        user_agent = request_user_agent(request)
+    elif session.force_user_agent_mismatch:
         user_agent = LOOKER_MISMATCH_USER_AGENT
         log_event(
             session,
@@ -170,16 +172,17 @@ async def generate_embed_tokens(request: Request):
         return JSONResponse({"detail": str(error)}, status_code=502)
     if "session_reference_token" in payload:
         payload = {key: value for key, value in payload.items() if key != "session_reference_token"}
-    log_event(
-        session,
-        method="PUT /api/looker/generate-embed-tokens",
-        actor="Host API",
-        summary="returned rotated nav/api tokens; session_reference_token omitted",
-        tokens_in=["host_access_token"],
-        tokens_out=["navigation_token", "api_token"],
-        ok=True,
-        status_code=200,
-    )
+    if not payload.get("frozen"):
+        log_event(
+            session,
+            method="PUT /api/looker/generate-embed-tokens",
+            actor="Host API",
+            summary="returned rotated nav/api tokens; session_reference_token omitted",
+            tokens_in=["host_access_token"],
+            tokens_out=["navigation_token", "api_token"],
+            ok=True,
+            status_code=200,
+        )
     return payload
 
 

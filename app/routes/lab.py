@@ -28,7 +28,7 @@ async def record_client_event(request: Request):
     expired = bool(body.get("expired", False))
     embed_client = str(body.get("embed_client") or "")
     if method == "iframe navigation to embed login URL":
-        session.looker_authentication_consumed = True
+        session.mark_authentication_consumed()
         session.mark_iframe_started(embed_client)
     if method in {"session:status", "session:expired"} and (not ok or expired):
         # Session-level “I can’t keep working.” Not “nav died” or “api died.”

@@ -59,6 +59,7 @@ class HostSession:
     auth0_claims: dict[str, Any]
 
     auth0_refresh_token: str | None = None
+    auth0_refresh_issued_at: datetime | None = None
     auth0_access_token: str | None = None
     auth0_id_token: str | None = None
     auth0_access_issued_at: datetime | None = None
@@ -78,6 +79,7 @@ class HostSession:
     looker_authentication_issued_at: datetime | None = None
     looker_authentication_expires_at: datetime | None = None
     looker_authentication_consumed: bool = False
+    looker_authentication_consumed_at: datetime | None = None
     looker_navigation_token: str | None = None
     looker_navigation_issued_at: datetime | None = None
     looker_navigation_expires_at: datetime | None = None
@@ -88,7 +90,9 @@ class HostSession:
     freeze_token_refresh: bool = False
     force_user_agent_mismatch: bool = False
     session_reference_dropped: bool = False
+    session_reference_dropped_at: datetime | None = None
     looker_session_revoked: bool = False
+    looker_session_revoked_at: datetime | None = None
     looker_sdk_iframe_started: bool = False
     looker_sdk_iframe_started_at: datetime | None = None
     looker_sdk_iframe_expired: bool = False
@@ -104,6 +108,26 @@ class HostSession:
 
     def record_refresh_marker(self, process: str) -> None:
         self.refresh_markers.append({"at": utc_now(), "process": process})
+
+    def mark_looker_session_revoked(self) -> None:
+        self.looker_session_revoked = True
+        if self.looker_session_revoked_at is None:
+            self.looker_session_revoked_at = utc_now()
+
+    def clear_looker_session_revoked(self) -> None:
+        self.looker_session_revoked = False
+        self.looker_session_revoked_at = None
+
+    def mark_session_reference_dropped(self) -> None:
+        self.looker_session_reference_token = None
+        self.session_reference_dropped = True
+        if self.session_reference_dropped_at is None:
+            self.session_reference_dropped_at = utc_now()
+
+    def mark_authentication_consumed(self) -> None:
+        self.looker_authentication_consumed = True
+        if self.looker_authentication_consumed_at is None:
+            self.looker_authentication_consumed_at = utc_now()
 
     def any_iframe_session_expired(self) -> bool:
         return self.looker_sdk_iframe_expired or self.looker_postmessage_iframe_expired

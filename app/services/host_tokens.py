@@ -92,6 +92,7 @@ def apply_auth0_token_set(session: HostSession, token_set: dict[str, Any]) -> No
     refresh_token = token_set.get("refresh_token")
     if refresh_token:
         session.auth0_refresh_token = refresh_token
+        session.auth0_refresh_issued_at = now
     access_token = token_set.get("access_token")
     if access_token:
         session.auth0_access_token = access_token

@@ -25,7 +25,7 @@ Index: [AGENTS.md](../../AGENTS.md). Invariants: [INVARIANTS.md](INVARIANTS.md).
 | `app/static/js/src/postmessage-tab.js` | Raw postMessage tab |
 | `app/static/js/src/lab.js` | Tab switch, controls, overlays |
 | `app/static/js/src/observatory.js` | Poll `/api/lab/snapshot` |
-| `docs/token-method-map.json` | Method catalog source of truth for UI |
+| `docs/token-method-map.json` | Method catalog + token `badge` (Auth0 / Host / Looker) for constellation |
 | `docs/sequence-happy-path.mmd` | Happy-path postMessage sequence |
 | `scripts/dev.mjs` | venv check, esbuild, uvicorn `--reload` localhost:3000 |
 | `scripts/local.sh` | uvicorn only (not `npm run dev`) |

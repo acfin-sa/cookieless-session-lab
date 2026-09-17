@@ -28,10 +28,14 @@ _looker_sdk_client = None
 
 
 class LookerSessionDead(Exception):
-    """Looker returned session_reference_token_ttl == 0."""
+    """Looker returned session_reference_token_ttl == 0 or there is no session_reference_token on the server.
+    Raised in: app/routes/looker.py — generate_embed_tokens"""
 
 
 class LookerNotConfigured(Exception):
+    """ Raised in: get_looker_sdk() when LOOKER_BASE_URL, LOOKER_CLIENT_ID,
+    or LOOKER_CLIENT_SECRET are missing.
+    """
     pass
 
 
@@ -144,6 +148,7 @@ def acquire_embed_session(session: HostSession, user_agent: str) -> dict[str, An
     session.looker_authentication_issued_at = now
     session.looker_authentication_expires_at = expiration_from_ttl_seconds(response.authentication_token_ttl)
     session.looker_authentication_consumed = False
+    session.looker_authentication_consumed_at = None
     session.looker_navigation_token = response.navigation_token
     session.looker_navigation_issued_at = now
     session.looker_navigation_expires_at = expiration_from_ttl_seconds(response.navigation_token_ttl)
@@ -151,7 +156,8 @@ def acquire_embed_session(session: HostSession, user_agent: str) -> dict[str, An
     session.looker_api_token_issued_at = now
     session.looker_api_token_expires_at = expiration_from_ttl_seconds(response.api_token_ttl)
     session.session_reference_dropped = False
-    session.looker_session_revoked = False
+    session.session_reference_dropped_at = None
+    session.clear_looker_session_revoked()
     session.record_refresh_marker("Looker acquire")
 
     browser_payload = {
@@ -254,7 +260,7 @@ def generate_embed_tokens(session: HostSession, user_agent: str) -> dict[str, An
 
     session_ttl = int(response.session_reference_token_ttl or 0)
     if session_ttl == 0:
-        session.looker_session_revoked = True
+        session.mark_looker_session_revoked()
         log_event(
             session,
             method="Looker PUT /embed/cookieless_session/generate_tokens",
@@ -309,7 +315,7 @@ def end_embed_session(session: HostSession, user_agent: str) -> None:
     #      losing the reference must kill the iframe identity.
     reference = session.looker_session_reference_token
     if not reference:
-        session.looker_session_revoked = True
+        session.mark_looker_session_revoked()
         return
     sdk = get_looker_sdk()
     try:
@@ -353,7 +359,7 @@ def end_embed_session(session: HostSession, user_agent: str) -> None:
             ok=True,
             status_code=status,
         )
-    session.looker_session_revoked = True
+    session.mark_looker_session_revoked()
     session.reset_iframe_clients()
     clear_looker_tokens(session)
 
@@ -383,8 +389,7 @@ def drop_session_reference(session: HostSession) -> None:
     # TTL: n/a after drop
     # WHY: if the host loses the high-privilege handle, generate_tokens cannot run.
     #      The iframe still looks fine until nav/api expire — then it cannot refresh.
-    session.looker_session_reference_token = None
-    session.session_reference_dropped = True
+    session.mark_session_reference_dropped()
     log_event(
         session,
         method="Drop session_reference on server",

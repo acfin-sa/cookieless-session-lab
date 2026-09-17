@@ -30,7 +30,8 @@ Looker tokens.
 The browser receives:
 
 - `host_session_id` as an opaque `HttpOnly` cookie;
-- `host_access_token` in JavaScript memory;
+- `host_access_token` in JavaScript memory (host BFF JWT that gates Looker host
+  routes; not Auth0 access and not Looker's `api_token`);
 - one-use `authentication_token` for the embed login URL;
 - short-lived `navigation_token` and `api_token` for the iframe.
 

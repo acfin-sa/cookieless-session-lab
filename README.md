@@ -14,7 +14,8 @@ cookie. Cookieless embed replaces that cookie dependency with short-lived tokens
 issued through the host server.
 
 - **Layer A — host:** Auth0 proves the user and the host creates a server-side
-  `HostSession`.
+  `HostSession`. The short-lived `host_access_token` is a **host** JWT that
+  gates Looker host routes; it is not Looker's `api_token`.
 - **Layer B — Looker:** the authenticated host acquires a Looker cookieless
   session and renews its iframe tokens.
 

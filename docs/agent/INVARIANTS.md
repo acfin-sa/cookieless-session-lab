@@ -10,7 +10,13 @@ MUST / MUST NOT for this tree. Match `app/` if this file and comments disagree; 
 - MUST NOT return Auth0 refresh, access, or ID tokens to the browser.
 - MUST keep `authentication_token` single-use on the embed login URL (`/login/embed`); mark consumed via `POST /api/lab/events` method `iframe navigation to embed login URL`.
 - MUST treat `navigation_token` and `api_token` as sibling JWTs: independent TTL/`exp`; `generate_tokens` rotates both; they are not Layer B identity.
-- MUST treat `host_session_id` as opaque lookup only; Looker authorization is `host_access_token` + server-held reference.
+- MUST treat `host_session_id` as opaque lookup only.
+- MUST treat `host_access_token` as the host BFF bearer (Layer A). It gates
+  `/api/looker/*` and `/api/lab/*`; it is not Looker's `api_token` and not Auth0
+  access. Looker identity is `session_reference_token`.
+- MUST keep observatory badges (Auth0 / Host / Looker) aligned with
+  `docs/token-method-map.json` `badge`. MUST NOT label `host_access_token` as
+  Auth0 or Looker.
 
 ## Authorization gates
 

@@ -28,7 +28,7 @@ Invariants first: [INVARIANTS.md](INVARIANTS.md). Map: [CODEMAP.md](CODEMAP.md).
 1. Add `HostSession` fields in `app/services/session_store.py`.
 2. Create/consume in the owning service (`host_tokens.py` or `looker_client.py`) with a `TOKEN:` comment.
 3. Update JSON filter if the token is server-only (`looker.py`).
-4. Add `docs/token-method-map.json` `tokens[]` + method `tokens_in`/`tokens_out`.
+4. Add `docs/token-method-map.json` `tokens[]` (`layer`, `badge`, `purpose`) + method `tokens_in`/`tokens_out`.
 5. Wire `observatory.py` `TOKEN_VALUE_FROM_SESSION` / `_token_times` / flags.
 6. Update CONTEXT + INVARIANTS.
 

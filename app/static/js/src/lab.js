@@ -160,7 +160,7 @@ async function startSelectedTab() {
 function initLabUi() {
   bindWidthSplit();
   bindHeightSplit();
-  bindObservatory({
+  const observatory = bindObservatory({
     cards: requireElement("token-cards"),
     gantt: requireElement("gantt"),
     events: requireElement("event-log"),
@@ -181,6 +181,7 @@ function initLabUi() {
       method: "POST",
       body: JSON.stringify({ freeze_token_refresh: event.target.checked }),
     });
+    await observatory.poll();
   });
 
   onElementEvent("toggle-user-agent-mismatch", "change", async (event) => {
@@ -188,10 +189,12 @@ function initLabUi() {
       method: "POST",
       body: JSON.stringify({ force_user_agent_mismatch: event.target.checked }),
     });
+    await observatory.poll();
   });
 
   onElementEvent("btn-drop-session-reference", "click", async () => {
     await fetchWithHostAccessToken("/api/lab/drop-session-reference", { method: "POST" });
+    await observatory.poll();
   });
 
   onElementEvent("btn-end-looker", "click", async () => {
@@ -200,6 +203,7 @@ function initLabUi() {
     stopPostMessageTab();
     mountedEmbedTab = null;
     await startSelectedTab();
+    await observatory.poll();
   });
 
   setInterval(updateExpiryCountdownOverlays, 1000);

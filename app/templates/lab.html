@@ -21,11 +21,11 @@
     </header>
 
     <section class="controls" id="lab-controls">
-        <label class="toggle" title="Blocks Looker generate_tokens only. Does not block acquire or host /api/host/refresh.">
+        <label class="toggle" title="Next generate_tokens returns the same nav/api JWTs (no Looker call). The iframe keeps working until those JWTs expire. Acquire and host refresh are unchanged. While this is on, User-Agent mismatch cannot fire.">
             <input type="checkbox" id="toggle-freeze" />
             Freeze token refresh
         </label>
-        <label class="toggle" title="Next generate_tokens sends a fake User-Agent. Looker binds the session to the original UA and returns 400.">
+        <label class="toggle" title="Next generate_tokens that actually calls Looker (freeze must be off) sends a fake User-Agent. Looker returns 400. Acquire is unchanged. Takes effect when the iframe asks to rotate, about 60s before nav/api expiry.">
             <input type="checkbox" id="toggle-user-agent-mismatch" />
             Force User-Agent mismatch
         </label>
@@ -38,20 +38,20 @@
         <div class="observatory">
             <section>
                 <h2>1. Lifetime swimlane</h2>
-                <p class="hint">Three lanes: Auth0, Looker Embed SDK (this lab’s focus), and iframe. Dotted lines mark generate_tokens / host refresh — click one to see which process fired.</p>
                 <ul class="gantt-legend" aria-label="Lifetime swimlane color legend">
                     <li><span class="swatch state-alive"></span> alive</li>
                     <li><span class="swatch state-expiring"></span> expiring</li>
                     <li><span class="swatch state-expired"></span> expired</li>
                     <li><span class="swatch state-consumed"></span> consumed</li>
                     <li><span class="swatch state-revoked"></span> revoked</li>
+                    <li><span class="swatch state-dotted">  </span> dotted lines: generate_tokens / host refresh</li>
+                    <li>click a bar for status · TTL · click a dotted line for renew process</li>
                 </ul>
                 <div id="gantt" class="gantt"></div>
             </section>
 
             <section>
                 <h2>2. Token constellation</h2>
-                <p class="hint">hola</p>
                 <div id="token-cards" class="token-grid"></div>
             </section>
 
@@ -70,10 +70,8 @@
                 <button type="button" class="tab" data-tab="postmessage">Raw postMessage</button>
             </div>
             <p class="hint" id="tab-caption">
-                The Embed SDK tab uses Looker’s JavaScript library to manage the iframe and tokens;
-                <br>server asks Looker for short-lived tokens and feeds them to the iframe.
-                <br>
-                <br>The Raw postMessage tab directly exchange tokens between the iframe and the window.
+                The Embed SDK manages the iframe and tokens in the server;
+                <br>Raw postMessage directly exchanges tokens iframe ↔ window.
             </p>
             <div class="iframe-stage" id="stage-embed-sdk">
                 <div id="embed-sdk-root" class="embed-slot"></div>
@@ -90,7 +88,8 @@
 
         <section class="method-catalog-pane">
         <h2>4. Method catalog</h2>
-        <p class="hint">Generated from <code>docs/token-method-map.json</code>. Renew is not acquire: refresh/generate rotate short-lived tokens; <code>session_reference_token_ttl == 0</code> means acquire again.</p>
+        <p class="hint">Generated from <code>docs/token-method-map.json</code>.
+            <br>Renew ≠ acquire: refresh/generate rotates short-lived tokens.</p>
         <div class="table-wrap">
             <table id="method-catalog"></table>
         </div>

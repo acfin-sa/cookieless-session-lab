@@ -41,6 +41,11 @@ flowchart LR
 The nesting matters. Layer A gates every host endpoint that acquires, renews, or
 ends Layer B. Layer B can end while the user remains logged into Layer A.
 
+On `/lab`, constellation badges are **Auth0**, **Host**, or **Looker**. Layer A
+includes both Auth0 tokens and host tokens. `host_access_token` is a **Host**
+JWT. “Consumed by `/api/looker/*`” means it is the bearer that *gates* Looker
+calls; it is not Looker's `api_token` and not Auth0's access token.
+
 ## Browser and server responsibilities
 
 The browser stores:
@@ -48,7 +53,7 @@ The browser stores:
 | Item | Location | Purpose |
 | --- | --- | --- |
 | `host_session_id` | First-party `HttpOnly`, `SameSite=Lax` cookie | Finds the server-side HostSession |
-| `host_access_token` | JavaScript memory | Authorizes `/api/looker/*` and `/api/lab/*` |
+| `host_access_token` | JavaScript memory | Host BFF JWT: gates `/api/looker/*` and `/api/lab/*` (not a Looker token) |
 | `authentication_token` | Embed login URL, once | Bootstraps an iframe |
 | `navigation_token` | Embed URL and iframe/SDK state | Authorizes navigation inside the embed |
 | `api_token` | Iframe/SDK state | Authorizes Looker API calls made by the iframe |

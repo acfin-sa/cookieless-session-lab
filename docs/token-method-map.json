@@ -4,42 +4,55 @@
       "id": "auth0_refresh",
       "name": "Auth0 refresh token",
       "layer": "A",
-      "storage": "server"
+      "badge": "Auth0",
+      "storage": "server",
+      "purpose": "Server-only. Mints new Auth0 access tokens. Not the browser host_access_token."
     },
     {
       "id": "auth0_access",
       "name": "Auth0 access token",
       "layer": "A",
-      "storage": "server"
+      "badge": "Auth0",
+      "storage": "server",
+      "purpose": "Server-only Auth0 API token. Not the host JWT in browser memory."
     },
     {
       "id": "host_session_reference",
       "name": "host_session_reference",
       "layer": "A",
-      "storage": "server"
+      "badge": "Host",
+      "storage": "server",
+      "purpose": "Pedagogical host id. Not sent to Auth0 or Looker."
     },
     {
       "id": "host_access_token",
       "name": "host_access_token",
       "layer": "A",
-      "storage": "browser memory"
+      "badge": "Host",
+      "storage": "browser memory",
+      "purpose": "Host BFF JWT. Gates /api/looker/* and /api/lab/*. Not Auth0 access and not Looker api_token."
     },
     {
       "id": "session_reference_token",
       "name": "session_reference_token",
       "layer": "B",
-      "storage": "server"
+      "badge": "Looker",
+      "storage": "server",
+      "purpose": "Looker embed session identity. Server only; stripped from JSON to the browser."
     },
     {
       "id": "authentication_token",
       "name": "authentication_token",
       "layer": "B",
-      "storage": "URL-once"
+      "badge": "Looker",
+      "storage": "URL-once",
+      "purpose": "Single-use bootstrap for /login/embed. Not the host JWT."
     },
     {
       "id": "navigation_token",
       "name": "navigation_token",
       "layer": "B",
+      "badge": "Looker",
       "storage": "iframe / URL",
       "purpose": "Page/dashboard navigation inside the embed iframe. Independent JWT clock from api_token."
     },
@@ -47,6 +60,7 @@
       "id": "api_token",
       "name": "api_token",
       "layer": "B",
+      "badge": "Looker",
       "storage": "iframe",
       "purpose": "Looker API calls the iframe makes (queries, data). Independent JWT clock from navigation_token."
     }
@@ -97,8 +111,21 @@
       ]
     },
     {
+      "id": "host_bootstrap",
+      "group": "host",
+      "kind": "create",
+      "method": "POST /api/host/bootstrap",
+      "direction": "Browser → Host API",
+      "tokens_in": ["host_session_id cookie"],
+      "tokens_out": ["host_access_token"],
+      "where_after": "JSON body → browser memory. This is the host BFF JWT, not Auth0 access and not Looker api_token.",
+      "failure_modes": [
+        "missing or unknown host_session_id cookie"
+      ]
+    },
+    {
       "id": "host_refresh",
-      "group": "auth0",
+      "group": "host",
       "kind": "renew",
       "method": "POST /api/host/refresh",
       "direction": "Browser → Host API",
