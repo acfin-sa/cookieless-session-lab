@@ -1,60 +1,71 @@
-# Architecture — nested cookieless sessions
+# Architecture: nested cookieless sessions
 
-This lab is a **design method**, not a product. The observatory exists so you can watch every handle move. The rules below are encoded in code comments at token boundaries (`TOKEN:`). Do not water them down.
+This lab demonstrates a design method: keep durable identity and renewal power
+on the server, and give the browser only narrow, short-lived handles.
 
-## 1. HTTP is stateless
+For setup and the demo, start with [README.md](README.md). For a shorter
+question-and-answer version, read
+[docs/cookieless-brief.md](docs/cookieless-brief.md). The machine-oriented map
+starts at [AGENTS.md](AGENTS.md).
 
-A “session” is not a browser object. It is:
+## Why cookieless exists
 
-1. A **server record** (the real session).
-2. A **handle** the client presents on later requests so the server can find that record.
+A Looker iframe is normally cross-site. Its Looker session cookie is therefore a
+third-party cookie, which browsers may block or partition. If Looker cannot
+receive that cookie, it cannot recover the iframe's session in the usual way.
 
-Without the record, the handle is a random string. Without the handle, the record is unreachable.
+Cookieless embed makes the embedding application responsible for delivering
+tokens. The host server calls privileged Looker APIs; the iframe asks for
+short-lived tokens and never receives the long-lived Looker session reference.
 
-In this lab:
+## The two layers
 
-| Layer | Server record | Handle the client presents |
+```mermaid
+flowchart LR
+    Browser["Browser<br/>opaque cookie + memory tokens"]
+    Host["Host server<br/>Layer A: Auth0 HostSession"]
+    Looker["Looker<br/>Layer B: cookieless session"]
+    Iframe["Looker iframe<br/>navigation + API tokens"]
+
+    Browser -->|host_session_id + host_access_token| Host
+    Host -->|server credentials + session_reference_token| Looker
+    Looker -->|browser-safe tokens via host| Browser
+    Browser -->|SDK or postMessage| Iframe
+```
+
+| Layer | Durable record | Browser handle |
 | --- | --- | --- |
-| A — Host | `HostSession` keyed by `host_session_id` (cookie value) | `host_session_id` cookie (opaque) + `host_access_token` (short-lived JWT) |
-| B — Looker | Looker’s embed session | `authentication_token` (URL once), `navigation_token` (in-iframe navigation), `api_token` (iframe API calls) |
+| A — host | In-memory `HostSession`, keyed by `host_session_id` | Opaque `HttpOnly` cookie plus short-lived `host_access_token` |
+| B — Looker | Looker's cookieless session, referenced by a server-held `session_reference_token` | One-use `authentication_token`, then `navigation_token` and `api_token` |
 
-`session_reference_token` (Looker) and `host_session_reference` (us) never leave the host server. They are not handles the *browser* presents; they are handles the *host* presents to Looker / to itself.
+The nesting matters. Layer A gates every host endpoint that acquires, renews, or
+ends Layer B. Layer B can end while the user remains logged into Layer A.
 
-## 2. Why cookieless embed exists
+## Browser and server responsibilities
 
-On a first-party site, the handle is usually a cookie. The browser sends it automatically. That works because the cookie’s site matches the page’s site.
+The browser stores:
 
-An embedded Looker iframe is **cross-site**. A Looker session cookie would be a **third-party cookie**. Many browsers never send it. Looker then cannot see who you are.
+| Item | Location | Purpose |
+| --- | --- | --- |
+| `host_session_id` | First-party `HttpOnly`, `SameSite=Lax` cookie | Finds the server-side HostSession |
+| `host_access_token` | JavaScript memory | Authorizes `/api/looker/*` and `/api/lab/*` |
+| `authentication_token` | Embed login URL, once | Bootstraps an iframe |
+| `navigation_token` | Embed URL and iframe/SDK state | Authorizes navigation inside the embed |
+| `api_token` | Iframe/SDK state | Authorizes Looker API calls made by the iframe |
 
-Cookieless embed replaces “the browser will attach a cookie” with “the embedding app will attach tokens.” The iframe is an untrusted peer that *asks* for those tokens; the host *mints* them via Looker Admin APIs.
+The server stores the Auth0 refresh, access, and ID tokens; the internal
+`host_session_reference`; the current host access token for observability; and
+all Looker token fields on `HostSession`. Most importantly,
+`session_reference_token` never enters a browser JSON response, URL, or browser
+storage.
 
-### Vanity-domain / first-party cookie fallback (not implemented)
+The host cookie is only an opaque lookup key. The bearer token is the
+short-lived authorization for protected BFF routes. The server checks its
+signature, expiry, type, HostSession, revocation state, and current `jti`.
 
-If you put Looker on a subdomain of the host (`looker.myapp.com` serving the same site as `myapp.com`), Looker’s session cookie becomes first-party and signed-embed cookies work again. That is a DNS / certificate trick, not a token protocol. It is unavailable for many Looker Cloud and multi-tenant setups. This lab implements the token split instead of a vanity domain.
+## Token lifetimes
 
-## 3. Split handles by privilege and lifetime
-
-| Privilege | Lifetime | Where it lives | Examples |
-| --- | --- | --- | --- |
-| High (can mint other tokens / prove identity for a long time) | Long | **Server only** | Auth0 refresh token, `host_session_reference`, Looker `session_reference_token` |
-| Low (can call APIs or restore a page *now*) | Short (~5–10 min) | Browser memory or iframe | `host_access_token`, Looker `navigation_token`, Looker `api_token` |
-| Bootstrap (create an iframe session) | Single use, ~30 s | **URL once** | Looker `authentication_token` (aka authorization token) |
-
-If a short-lived token leaks, the window is small. If a long-lived high-privilege token leaks, an attacker can mint fresh short-lived material until you revoke. That is why `session_reference_token` must never appear in the iframe URL, `localStorage`, or a JSON response to the browser.
-
-`host_session_id` is a first-party **opaque** cookie: it only identifies which `HostSession` to load. It cannot call Looker by itself. `host_access_token` is the short-lived privilege for `/api/*`.
-
-### What controls duration (lab env vs tenant settings)
-
-**Auth0 token durations are Auth0 tenant settings, not lab env vars.** This repo does not configure them from `.env`. In the Auth0 Dashboard you set, among other things:
-
-- Access token and ID token lifetime (API / application settings)
-- Refresh token absolute and idle expiration, and rotation / reuse detection
-- Universal Login SSO session: Idle Session Lifetime and Maximum Session Lifetime
-
-After login or refresh, the lab stores Auth0 tokens on `HostSession` and shows `exp` in the observatory when the JWT carries it. Refresh tokens have no `exp` in the UI until Auth0 revokes them or they expire per tenant policy.
-
-**What this lab does configure:**
+The values controlled by this repository are:
 
 | Setting | Where | Role |
 | --- | --- | --- |
@@ -62,121 +73,132 @@ After login or refresh, the lab stores Auth0 tokens on `HostSession` and shows `
 | `LOOKER_EMBED_SESSION_LENGTH` | `.env` (default **720** s) | Looker `session_length` at acquire |
 | `HOST_SESSION_COOKIE_MAX_AGE` | `app/services/host_session_auth.py` (12 h) | How long the opaque `host_session_id` cookie lasts |
 
-Looker `navigation_token` / `api_token` TTLs (~10 min) and `authentication_token` (~30 s) come back from Looker on acquire/generate; they are not env vars here. Those two short-lived tokens are **not the same JWT** and are **not** the embed session itself — see below.
+`HOST_ACCESS_TOKEN_TTL_SECONDS` is hardcoded in `app/config.py`; it is not an
+`.env` variable. `oauth_pkce_state` lasts 600 seconds
+(`SessionMiddleware` in `app/web.py`). `host_session_reference` is a
+pedagogical host-side id minted at callback; it is not sent to Auth0 or Looker.
+The browser holds `host_access_token` in memory only (HOST_ACCESS_TOKEN_TTL_SECONDS, default 200 s).
 
-### Two Looker JWTs, one embed session
+Auth0 token durations come from Auth0 tenant policy. Looker returns the
+`authentication_token_ttl`, `navigation_token_ttl`, `api_token_ttl`, and
+`session_reference_token_ttl`; the lab does not configure those individual
+TTLs. In normal Looker responses, authentication is roughly 30 seconds and the
+navigation/API tokens are roughly 10 minutes, but the UI follows returned
+values rather than assuming them.
 
-`navigation_token` and `api_token` are two different short-lived JWTs. Acquire and `generate_tokens` usually mint them **together**, but each response field has its own `exp` / TTL. Losing one clock is not the same as losing the other, and neither clock is Layer B identity.
+`navigation_token` and `api_token` are sibling JWTs, not aliases. They are
+usually minted together, but each has its own TTL and job.
 
-| Token | What it authorizes |
+## Acquire, renew, and login are different operations
+
+| Operation | Result |
 | --- | --- |
-| `navigation_token` | Moving around **inside** the embed: page / dashboard navigation in the iframe |
-| `api_token` | Looker **API calls** the iframe makes (queries, data) |
+| Auth0 code exchange | Proves the user and creates Layer A |
+| `POST /api/host/bootstrap` | Returns the current host JWT or mints one when missing/near expiry |
+| `POST /api/host/refresh` | Optionally refreshes Auth0 server tokens, then rotates the host JWT |
+| Looker acquire | Creates Layer B or reattaches using the stored session reference; returns a new one-use authentication token |
+| Looker generate | Rotates navigation and API tokens under the existing Layer B identity |
 
-Layer B identity is `session_reference_token` (host-only). The iframe’s “I can’t keep working” signal is a **session-level event**, not a per-JWT death certificate.
+Renewal does not mean a new login. On Looker generate, the server supplies the
+stored session reference and the last navigation/API tokens. If Looker returns
+a replacement session reference, the server stores it. Only the new
+browser-safe tokens are returned.
 
-### `session:expired` is session-level
+If `session_reference_token_ttl` is zero, `LookerSessionDead` becomes HTTP 409
+with `code: SESSION_DEAD`. Layer B must be acquired again. Layer A may still be
+valid, so reacquiring Looker does not necessarily require another Auth0 login.
 
-`session:expired` (and `session:status` with `expired=true`) means the embed considers its **usable token pair** dead. Looker does **not** say “nav died” or “api died.” Typical causes: both TTLs ran out without a successful `generate_tokens`, generate failed, or Layer B identity ended.
+## The iframe trust boundary
 
-The observatory must match that model:
+The iframe may request tokens with `session:tokens:request`. It may not choose
+the session reference or call Looker's privileged acquire/generate APIs.
 
-- Label the shared event **iframe session expired** on a Layer B row.
-- Let each nav/api card follow **its own JWT `exp`**. Do not smash both `expires_at` values to now, and do not paint both cards from one flag.
+The two lab tabs implement the same boundary differently:
 
-## 4. The iframe is an untrusted peer
+- **Embed SDK:** `initCookieless` invokes host callbacks and manages iframe
+  messaging.
+- **Raw postMessage:** the browser validates both `event.source` and the Looker
+  origin, then sends only navigation/API token fields.
 
-The Looker UI inside the iframe may:
+The diagram at [`docs/sequence-happy-path.mmd`](docs/sequence-happy-path.mmd),
+also rendered at `/sequence`, shows the raw postMessage happy path. It is not a
+complete SDK trace or failure matrix.
 
-- `postMessage` `session:tokens:request`
-- navigate using `navigation_token` (in-iframe page/dashboard moves)
-- call Looker APIs using `api_token` (queries, data)
+## User-Agent and embed-domain binding
 
-It may **not**:
+Looker binds a cookieless session to client context. A different User-Agent on
+generate commonly produces HTTP 400.
 
-- call `acquire_embed_cookieless_session` or `generate_tokens_for_cookieless_session`
-- see `session_reference_token`
-- dictate which session the host uses
+The lab forwards the current incoming request's User-Agent on acquire, generate,
+and end. In the normal single-browser flow this remains the same. The
+**Force User-Agent mismatch** control replaces it with
+`CookielessLab/ua-mismatch` for generate only. The login User-Agent is also
+recorded for display, but the routes do not compare requests against that
+stored value.
 
-The Embed SDK and the raw `postMessage` tab both obey this. They differ only in *who types the messages*. Compare the two tabs in the observatory.
+Acquire sends `APP_BASE_URL` as `embed_domain`. The same origin must be accepted
+by Looker. A missing or mismatched domain can appear as an acquire failure or a
+broken iframe.
 
-## 5. Bind session to client context
+## What `session:expired` means
 
-Looker binds a cookieless session to the **User-Agent** of the browser that acquired it. Generate-tokens with a different UA returns **400**. This lab always forwards the original browser UA, and has a control to send a fake one so you can watch the 400 land in the event log.
+`session:expired`, or `session:status` with `expired=true`, is the iframe's
+session-level signal that it cannot continue. It does not independently prove
+that both sibling JWT clocks expired, and it does not revoke the server's
+`session_reference_token`.
 
-Looker also binds **embed_domain** (allow-list in Admin, or passed at acquire time on Looker 23.8+). A missing allow-list looks like a broken iframe, not a neat JSON error — check the event log and Looker Admin.
+The observatory therefore keeps:
 
-## 6. Refresh is not acquire
+- separate expiry clocks for navigation and API tokens;
+- separate session-level state for each SDK/raw iframe;
+- the session reference alive until Looker reports zero TTL, the host ends
+  Layer B, or the lab deliberately drops its local reference.
 
-| Method | What it does |
+## Logout in more than one browser
+
+Each Auth0 callback creates a separate `HostSession` and cookie. The in-memory
+store is keyed only by `host_session_id`; it has no user index.
+
+`GET /logout` ends the current cookie-selected Looker session, attempts to
+revoke that HostSession's Auth0 refresh token, deletes that HostSession, clears
+the cookie, and redirects through Auth0 logout. Another browser's HostSession is
+not deleted by this repository.
+
+A real logout-everywhere feature must index sessions by Auth0 `sub` and revoke
+every matching HostSession, Auth0 refresh token, and Looker session. That is a
+separate product choice, not a property provided automatically by cookieless
+embed.
+
+## Validity is checked by layer
+
+There is no single global “logged in” bit.
+
+| Question | Check |
 | --- | --- |
-| `POST /embed/cookieless_session/acquire` | Creates **or reattaches** identity. Issues a new `authentication_token` for a new iframe. If you pass an existing `session_reference_token`, you join the same session (needed for a second iframe). Session length is **not** extended on reattach. |
-| `PUT /embed/cookieless_session/generate_tokens` | Rotates `navigation_token` and `api_token` **without** creating a new identity. If `session_reference_token_ttl == 0`, the session is dead; acquire again. |
+| Can the host find the session? | Cookie maps to an existing, non-revoked `HostSession` |
+| Can this browser call protected host APIs? | Host JWT verifies and its `jti` matches the current HostSession value |
+| Can Layer A renew? | Auth0 accepts the server-held refresh token |
+| Are iframe tokens current? | Each returned TTL/expiry remains positive |
+| Can Layer B renew? | Generate succeeds and session-reference TTL is nonzero |
+| Can the iframe continue? | Token checks plus iframe session status |
 
-When Looker returns `session_reference_token_ttl == 0` on `generate_tokens`, the host raises `LookerSessionDead` and `PUT /api/looker/generate-embed-tokens` responds with **HTTP 409** and `code: SESSION_DEAD`. Layer B is finished — the iframe cannot refresh nav/api. **Layer A can still be valid:** `host_session_id`, stored Auth0 refresh, and a fresh `host_access_token` may all still work. The human can call acquire again without Auth0 login unless the IdP SSO session has also ended.
+The lab's event log and token cards expose these checks separately so a failure
+in one layer is not mislabeled as a global logout.
 
-Layer A has the same split: Auth0 `/oauth/token` (code) **creates** the host session; Auth0 `/oauth/token` (refresh) + `POST /api/host/refresh` **rotates** `host_access_token`.
+## Moving the pattern into a real application
 
-## 7. Nested sessions
+Keep these boundaries:
 
-```
-Auth0 proves the human
-    └── HostSession authorizes the BFF  (Layer A)
-            └── Looker cookieless session authorizes the iframe  (Layer B)
-```
+1. **Identity adapter:** Auth0 authorize, callback, token refresh, and revoke.
+2. **Host session repository:** durable, encrypted server storage; opaque cookie
+   lookup; user index for logout-everywhere.
+3. **Host token service:** mint and verify short-lived BFF access tokens.
+4. **Looker bridge:** acquire, generate, and end; explicit server-only response
+   filtering.
+5. **Embed client adapter:** SDK or postMessage implementation with strict
+   origin/source validation.
+6. **Observability:** metadata and redacted events, never raw credentials.
 
-Losing any outer layer must refuse the inner ones:
-
-- Logout / missing `host_session_id` → no acquire, no generate, Looker session deleted.
-- Expired `host_access_token` → Looker routes return 401 even if Looker tokens are still alive.
-- Dead Looker `session_reference_token` (`ttl == 0` → `LookerSessionDead` / HTTP 409 on generate, or dropped on the server) → iframe dies; host login can remain. `session:expired` from the iframe is **iframe session expired** (session-level). It does not revoke `session_reference_token`, overwrite a consumed `authentication_token`, or rewrite each JWT’s `exp`.
-
-The observatory colors this on purpose.
-
-## 8. Failure is part of the lesson
-
-| Failure | Lab control or reproduction |
-| --- | --- |
-| Token expired | Wait, or **Freeze token refresh** and watch nav/api die |
-| `authentication_token` consumed | Load the iframe; a second acquire is required for a new auth token |
-| User-Agent mismatch | **Force User-Agent mismatch** on next generate_tokens |
-| Missing embed-domain allow-list | Documented in README; acquire fails or iframe refuses |
-| Lost server state | **Drop session_reference on server** |
-
-## Token map (both layers)
-
-See [`docs/token-method-map.json`](docs/token-method-map.json) — the method catalog table is generated from that file. Every token-moving function in this repo has a `TOKEN:` comment:
-
-```
-TOKEN: <name>
-CREATED BY / CONSUMED BY
-LIVES AT
-TTL
-WHY
-```
-
-## Runtime shape
-
-```
-Browser
-  host_session_id        HttpOnly cookie, opaque
-  host_access_token      memory only (HOST_ACCESS_TOKEN_TTL_SECONDS, default 200 s)
-  authentication_token   URL once (~30 s, single use)
-  navigation_token       embed URL + postMessage (~10 min) — in-iframe navigation
-  api_token              postMessage into iframe (~10 min) — iframe Looker API calls
-
-Host server (in-memory HostSession)
-  host_session_reference
-  Auth0 refresh + access + id tokens
-  current host_access_token (so the observatory can show TTL)
-  Looker session_reference_token
-  last Looker navigation_token + api_token  (for generate_tokens)
-```
-
-Restarting the process wipes Layer A and Layer B. That is intentional for a local lab.
-
-## Local origin and cookies
-
-The browser origin for this lab is **`http://localhost:3000`**. Auth0 callback URLs, Looker `embed_domain`, and redirects are built from `APP_BASE_URL`, never from whatever IP the process bound.
-
-`host_session_id` and `oauth_pkce_state` are first-party cookies: `HttpOnly`, `SameSite=Lax`. `Secure` is set only when `APP_BASE_URL` is `https`. On the HTTP lab they must be `Secure=False` or the browser will drop them.
+Replace process memory with a shared server-side store before scaling beyond
+one process. Keep token ownership and response filtering at the service
+boundary rather than spreading them through route or UI code.

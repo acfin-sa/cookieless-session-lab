@@ -1,94 +1,97 @@
-# cookieless-session-lab
+# Cookieless Looker session lab
 
-Pedagogical test bench. Not a product. A developer logs in with Auth0, opens an embedded Looker dashboard, and **sees** a two-layer tokenized / cookieless session: which tokens exist, who owns them, which HTTP / postMessage methods create or consume them, when they expire, and how they refresh.
+This repository is a teaching lab, not a production application. It shows how an
+Auth0 host session can safely support a Looker embed when third-party Looker
+cookies are unavailable.
 
-Read [ARCHITECTURE.md](ARCHITECTURE.md) for the design method. The method catalog in the UI is generated from [`docs/token-method-map.json`](docs/token-method-map.json).
+It is for developers evaluating cookieless embed, debugging token renewal, or
+extracting the pattern into an existing application.
 
-## Run
+## The idea
+
+An embedded Looker iframe is cross-site, so browsers may block its session
+cookie. Cookieless embed replaces that cookie dependency with short-lived tokens
+issued through the host server.
+
+- **Layer A — host:** Auth0 proves the user and the host creates a server-side
+  `HostSession`.
+- **Layer B — Looker:** the authenticated host acquires a Looker cookieless
+  session and renews its iframe tokens.
+
+Long-lived and identity-bearing tokens stay on the server. The browser receives
+an opaque `HttpOnly` cookie, a short-lived host JWT in memory, and only the
+Looker tokens needed by the iframe.
+
+Read [ARCHITECTURE.md](ARCHITECTURE.md) for the design method and
+[the cookieless brief](docs/cookieless-brief.md) for a concise Q&A. Coding tools
+should start at [AGENTS.md](AGENTS.md).
+
+## Quick start
+
+Requirements: Python 3, Node.js, npm, an Auth0 Regular Web Application, and a
+Looker instance with Cookieless Embed enabled.
 
 ```bash
-cp .env.example .env
-# fill Auth0 + Looker secrets in .env — never commit .env
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
 npm install
+cp .env.example .env
 npm run dev
 ```
 
-Then open **http://localhost:3000**. Uvicorn binds `localhost:3000`. Auth0 callbacks, Looker `embed_domain`, and every redirect use `APP_BASE_URL` (`http://localhost:3000`).
+`npm install` also creates `.venv` and installs Python requirements when needed,
+so the first two commands are optional if you prefer the automated setup. Fill
+`.env` before logging in; never commit it.
 
-Host cookies (`host_session_id`, `oauth_pkce_state`) are `HttpOnly; SameSite=Lax`. `Secure` is **off** on HTTP and **on** only when `APP_BASE_URL` starts with `https://`.
+Required values:
 
-`npm run dev` creates `.venv`, installs Python deps, bundles `@looker/embed-sdk`, and starts the FastAPI app.
+| Area | Values |
+| --- | --- |
+| Host | `APP_BASE_URL`, a long random `APP_KEY_SECRET` |
+| Auth0 | `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET` |
+| Looker API | `LOOKER_BASE_URL`, `LOOKER_CLIENT_ID`, `LOOKER_CLIENT_SECRET` |
+| Embed | `LOOKER_EMBED_HOST`, `LOOKER_EMBED_DASHBOARD_ID` |
 
-## Fill `.env`
+For Looker Cloud, use `https://<instance>.cloud.looker.com` without port `19999`.
+The remaining embed grants and the 720-second demo session are documented in
+`.env.example`.
 
-Copy `.env.example`. You supply:
+Configure Auth0 with:
 
-- Auth0 Regular Web App: `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`
-- Optional `AUTH0_AUDIENCE` (leave empty if unused)
-- `APP_KEY_SECRET` — signs the host access JWT and the PKCE state cookie
-- Looker API: `LOOKER_BASE_URL`, `LOOKER_CLIENT_ID`, `LOOKER_CLIENT_SECRET`
-  - Looker Cloud: `https://<instance>.cloud.looker.com` (HTTPS 443). Do **not** append `:19999` — that port is for self-hosted Looker and will time out on Cloud.
-- `LOOKER_EMBED_HOST`, `LOOKER_EMBED_DASHBOARD_ID` (a real embeddable dashboard id)
+- callback URL `http://localhost:3000/callback`
+- logout URL and web origin `http://localhost:3000`
+- Authorization Code + PKCE, Refresh Token grant, and `offline_access`
 
-Embed user **identity** comes from the Auth0 id token (`sub`, name, email). Embed **grants** are constants:
+In Looker Admin, enable Embed SSO Authentication and Cookieless Embed, configure
+an Embed JWT Secret, allow `http://localhost:3000`, and grant the API user access
+to acquire, generate, and delete cookieless sessions. Do not reset the Embed JWT
+Secret merely to run this lab; doing so invalidates live sessions.
 
-| Env | Default | Sent to Looker acquire as |
-| --- | --- | --- |
-| `LOOKER_EMBED_SESSION_LENGTH` | `720` (12 min) | `session_length` |
-| `LOOKER_EMBED_FORCE_LOGOUT_LOGIN` | `true` | `force_logout_login` (Looker cookieless ignores this; login is always forced) |
-| `LOOKER_EMBED_GROUP_IDS` | `1` | `group_ids` |
-| `LOOKER_EMBED_EXTERNAL_GROUP_ID` | `cookieless-lab` | `external_group_id` |
-| `LOOKER_EMBED_MODELS` | `dw_v3` | `models` |
-| `LOOKER_EMBED_PERMISSIONS` | `access_data,see_looks,see_user_dashboards` | `permissions` |
+## Open these URLs
 
-## Auth0 application settings
+| URL | Purpose |
+| --- | --- |
+| `http://localhost:3000` | Sign in |
+| `http://localhost:3000/lab` | Interactive session observatory |
+| `http://localhost:3000/architecture` | Rendered architecture guide |
+| `http://localhost:3000/sequence` | Happy-path raw `postMessage` sequence |
+| `http://localhost:3000/health` | Local health and origin check |
 
-Regular Web Application, Authorization Code + PKCE, Refresh Token grant, and `offline_access` (Allow Offline Access).
+The sequence is intentionally a happy path for the raw `postMessage` protocol.
+It is not the complete Embed SDK flow or a failure matrix.
 
-- Allowed Callback URLs: `http://localhost:3000/callback`
-- Allowed Logout URLs: `http://localhost:3000`
-- Allowed Web Origins: `http://localhost:3000`
+## Ten-minute demo
 
-If Auth0 does not return a refresh token, the lab still mints `host_access_token` from the HostSession and logs a warning. Enable `offline_access` to see Auth0 refresh in the constellation.
+1. Keep `LOOKER_EMBED_SESSION_LENGTH=720` for a viewable 12-minute session.
+2. Log in and compare the **Embed SDK** and **Raw postMessage** tabs.
+3. Watch the host token renew independently from Looker navigation/API tokens.
+4. Turn on **Freeze token refresh** and let the short-lived Looker tokens age.
+5. Turn freeze off, reacquire if needed, then enable **Force User-Agent
+   mismatch** to make the next Looker generate call fail.
+6. Use **Drop session_reference on server** to simulate lost BFF state.
+7. Use **End Looker session** to end Layer B while Layer A remains logged in.
+8. Log out to delete the current browser's HostSession and clear its cookie.
 
-## Looker Admin prerequisites (human)
-
-Do these in Looker Admin **before** the lab can acquire a cookieless session. Do not reset secrets from this repo.
-
-1. **Embed SSO Authentication** enabled (Admin → Platform → Embed).
-2. **Cookieless Embed** enabled (same Embed panel / cookieless API exposed).
-3. **Embed JWT Secret** set. Do **not** reset it — a reset invalidates every live cookieless session.
-4. This lab’s origin **`http://localhost:3000`** allow-listed as an embed domain **or** passed at cookieless session acquire time (Looker 23.8+). This lab always sends `embed_domain=http://localhost:3000` on acquire.
-5. The API user (`LOOKER_CLIENT_ID`) can call `acquire_embed_cookieless_session` and `generate_tokens_for_cookieless_session` (Admin, or a role with `manage_embed_settings`).
-6. **Persistent Sessions** on if you want multi-iframe attach (second iframe joins the same `session_reference_token`).
-
-If cookieless endpoints are off, acquire often looks like a generic 404.
-
-## Tour after login
-
-You land on `/lab` — the Session Observatory. The Looker iframe stays on the right of a height-capped split; the method catalog sits full-width below.
-
-1. **Token constellation** — eight cards, both layers.
-2. **Lifetime swimlane** — Gantt from login `t=0`. Bars tick every second. Hatched end of nav/api = Looker’s ~60s refresh window. Dots = refresh markers.
-3. **Live event log** — Browser / Host API / Auth0 / Looker API / iframe postMessage. Click a row to highlight tokens. The static happy-path mermaid lives on `/sequence` (same pattern as `/architecture`).
-4. **Method catalog** — full-width table from `docs/token-method-map.json`, under the dashboards.
-5. **Embed SDK** vs **Raw postMessage** — same observatory. Compare who moves `session:tokens:request` / `session:tokens`.
-6. **Teaching controls**
-   - Freeze token refresh — let nav/api expire and watch Looker break.
-   - Force User-Agent mismatch — next `generate_tokens` sends a fake UA; Looker 400s in the log.
-   - Drop `session_reference` on server — lost BFF state.
-   - Countdown overlay on the iframe when nav/api are under 60s.
-
-Logout revokes the Auth0 refresh token when possible, deletes the Looker cookieless session, drops the HostSession, and clears the cookie.
-
-## Layers in one paragraph
-
-**Layer A.** Auth0 Authorization Code + PKCE. Refresh, access, and id tokens stay on the server. Browser gets `host_session_id` (opaque HttpOnly cookie) and `host_access_token` (~200 s, memory). `POST /api/host/refresh` uses the cookie + stored Auth0 refresh to mint a new host access token.
-
-**Layer B.** Only if Layer A bearer is valid. Host calls Looker `acquire` / `generate_tokens` / `DELETE` with the **browser User-Agent**. `session_reference_token` never appears in a browser JSON body. The iframe consumes `authentication_token` once on `/login/embed`, then asks for `navigation_token` (in-iframe page/dashboard navigation) and `api_token` (iframe Looker API calls — queries, data) via postMessage or the Embed SDK. Those two are independent short-lived JWTs, usually minted together, each with its own `exp`. `session:expired` is a session-level “I can’t keep working” event, not “nav died” or “api died.”
-
-Server uses Python `looker-sdk` (same API as `@looker/sdk`). The browser uses `@looker/embed-sdk` 2.x.
-
-## Process memory
-
-HostSession is in-memory. Restarting `npm run dev` kills both layers. That is intentional.
+The method catalog in `/lab` comes from
+[`docs/token-method-map.json`](docs/token-method-map.json). Host sessions are
+in process memory, so restarting the app intentionally clears both layers.

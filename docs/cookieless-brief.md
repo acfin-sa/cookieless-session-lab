@@ -1,163 +1,109 @@
-# Cookieless Looker — study brief
+# Cookieless Looker: briefing Q&A
 
-Understand cookieless Looker, refresh vs session tokens, browser vs server storage, server role on renew, multi-browser logout, and how to check validity — enough to modularize later.
+This is the short briefing for the
+[cookieless session lab](../README.md). See
+[ARCHITECTURE.md](../ARCHITECTURE.md) for the full design.
 
-Reference lab: `cookieless-session-lab` (Layer A host + Layer B Looker embed).
+## Why does Looker need a cookieless mode?
 
----
+An embedded Looker iframe is cross-site. Browsers may block or partition
+Looker's third-party session cookie, so the iframe cannot reliably recover a
+normal cookie-backed session.
 
-## 1. What “cookieless” means for Looker
+Cookieless embed moves that responsibility to the embedding application. The
+host server establishes the Looker session and supplies short-lived iframe
+tokens without exposing the durable session reference.
 
-Looker is embedded cross-origin. The browser cannot reliably send Looker session cookies (third-party cookies).
+## What are Layer A and Layer B?
 
-**Cookieless** = the host app proves who the embed is, instead of the Looker’s cookies being in charge of that verification. The host server talks to Looker Admin APIs, mints short-lived tokens, and feeds them to the iframe (Embed SDK or `postMessage`). The iframe is an untrusted peer: it may *ask* for tokens; it must not own the long-lived identity.
+| Layer | Responsibility | Durable server-side identity |
+| --- | --- | --- |
+| A — host | Auth0 login and access to the host API | `HostSession` |
+| B — Looker | Embedded dashboard session | `session_reference_token` |
 
-Two nested sessions:
+Layer A gates Layer B. A user can remain logged into the host after ending the
+Looker session, but a missing or revoked host session must not acquire or renew
+Looker tokens.
 
+## Which tokens can reach the browser?
 
-| Layer          | What it is               | Identity handle (server-only)                         |
-| -------------- | ------------------------ | ----------------------------------------------------- |
-| **A — Host**   | Your app’s login (Auth0) | Host session record + opaque `host_session_id` cookie |
-| **B — Looker** | Cookieless embed         | `session_reference_token` (never to the browser)      |
+The browser receives:
 
+- `host_session_id` as an opaque `HttpOnly` cookie;
+- `host_access_token` in JavaScript memory;
+- one-use `authentication_token` for the embed login URL;
+- short-lived `navigation_token` and `api_token` for the iframe.
 
-Logout / missing host session → no acquire, no generate.
+Auth0 refresh, access, and ID tokens remain on the server.
+`session_reference_token` also remains on the server and is never included in a
+browser JSON response or URL. `host_session_reference` is a lab-only host id
+shown in the observatory; it is not sent to Auth0 or Looker.
 
-Layer B dies with the host gate, not the other way around.
+## Why are there two short-lived Looker tokens?
 
----
+`navigation_token` authorizes movement inside the embed.
+`api_token` authorizes Looker API work performed by the iframe. They are
+siblings under the same session reference, are normally rotated together, and
+have independent returned TTLs.
 
-## 2. Refresh tokens vs session tokens
+## Does renew mean login again?
 
+No. Login proves identity; renewal rotates short-lived credentials while the
+durable server-side session remains.
 
-| Kind                      | Role                                                     | Lifetime (typical)  | Privilege                   |
-| ------------------------- | -------------------------------------------------------- | ------------------- | --------------------------- |
-| **Session / short-lived** | Prove access *now* (API call, iframe nav, host `/api/`*) | Minutes             | Limited                     |
-| **Refresh / long-lived**  | Mint new short-lived material without full login         | Hours–days (policy) | High — can mint more tokens |
+`POST /api/host/refresh` uses the cookie-selected HostSession, refreshes Auth0
+tokens when a refresh token is available, and mints a new host JWT.
 
+`PUT /api/looker/generate-embed-tokens` uses the server-held Looker reference
+and the previous navigation/API tokens to obtain replacements. If Looker reports
+zero session-reference TTL, Layer B is dead and must be acquired again.
 
-**Layer A (Auth0 / host)**
+## What does the iframe's `session:expired` event prove?
 
-- Auth0 **refresh_token** — long-lived; server only; used to get new Auth0 access/id when needed.
-- Auth0 **access_token** / **id_token** — short-lived; server only in this design.
-- **host_access_token** — short-lived host JWT in browser memory; authorizes `/api/`*. Not Auth0’s refresh token.
+It says the iframe cannot keep working. It does not revoke the server's session
+reference and does not rewrite the independent navigation/API expiry clocks.
+The lab tracks those states separately.
 
-**Layer B (Looker)**
+## Why does User-Agent matter?
 
-- **session_reference_token** — Looker embed *session identity*; server only; input to `generate_tokens` / end session. Behaves like “session handle”.
-- **authentication_token** — one-shot bootstrap (~30s); put on embed login URL once; then consumed.
-- **navigation_token** — short-lived; iframe navigation inside the embed.
-- **api_token** — short-lived; iframe Looker API calls.
+Looker binds cookieless calls to the client context. The lab forwards the
+incoming request's User-Agent on acquire, generate, and end. A normal browser
+keeps it stable; the mismatch control substitutes a fake value on generate so
+the failure is visible.
 
-`navigation_token` and `api_token` are siblings under the same `session_reference_token`. Separate JWTs, separate jobs, usually rotated together by `generate_tokens`.
+## What happens with two browsers?
 
-An iframe `session:expired` is a *session-level* signal — not proof that each JWT’s `exp` failed independently, and not automatic revoke of `session_reference_token`.
+Each callback creates a separate HostSession. Logging out in browser 1 deletes
+only the session selected by browser 1's cookie. Browser 2 remains logged in.
 
-**Rule:**
+Logout-everywhere requires a server-side index from Auth0 `sub` to every
+HostSession, followed by revocation of each Auth0 refresh token and Looker
+session. This lab intentionally does not implement that index.
 
-- long-lived + high privilege → server only.
-- Short-lived → may touch the browser (memory / iframe), never `localStorage` for secrets you care about.
+## How do we decide whether the user is “logged in”?
 
----
+There is no universal bit. Check the layer that matters:
 
-## 3. Browser vs server
+| Question | Evidence |
+| --- | --- |
+| Host session exists? | Cookie resolves to a non-revoked HostSession |
+| Host API access works? | Host JWT verifies and its `jti` is current |
+| Auth0 can renew? | Auth0 accepts the server-held refresh token |
+| Looker tokens are current? | Their individual returned TTLs have not elapsed |
+| Looker session can renew? | Generate succeeds with nonzero session-reference TTL |
+| Iframe is usable? | Token state plus the iframe session event |
 
-### Browser
+## What should become modules in a real application?
 
+Separate Auth0 identity, the host session repository, host-token minting,
+Looker acquire/generate/end, the SDK or postMessage browser adapter, and
+redacted observability.
 
-| Handle                          | Where               | Notes                                                  |
-| ------------------------------- | ------------------- | ------------------------------------------------------ |
-| `host_session_id`               | HttpOnly cookie     | Opaque. Only identifies which host record to load.     |
-| `host_access_token`             | Memory              | Short JWT for `/api/*`. Refreshed via cookie + server. |
-| `authentication_token`          | URL once            | Then gone.                                             |
-| `navigation_token`, `api_token` | Iframe / SDK memory | Never include `session_reference_token`.               |
+Replace the lab's in-memory store with shared durable storage and add a user
+index if logout-everywhere is required. Keep renewal credentials server-only.
 
+## One-sentence takeaway
 
-### Server
-
-
-| Handle                         | Notes                                                |
-| ------------------------------ | ---------------------------------------------------- |
-| HostSession record             | Auth0 tokens, Looker reference, flags, event log     |
-| Auth0 refresh / access / id    | Never returned to JS                                 |
-| `session_reference_token`      | Never in URL, `localStorage`, or JSON to the browser |
-| `host_session_reference` (lab) | Internal host id; not a client credential            |
-
-
----
-
-## 4. What the server does on renew
-
-Renew ≠ login. Renew = rotate short-lived tokens while identity stays on the server.
-
-**Host renew (**`POST /api/host/refresh`**)**
-
-1. Browser sends opaque cookie (and may send expiring bearer).
-2. Server loads HostSession.
-3. If Auth0 refresh is present, server may refresh Auth0 tokens.
-4. Server mints a new `host_access_token`.
-5. Browser stores the new JWT in memory only.
-
-**Looker renew (**`generate_tokens`**)**
-
-1. Browser asks (SDK callback or `session:tokens:request`).
-2. Server loads `session_reference_token` (and last nav/api if Looker requires them).
-3. Server calls Looker; gets new `navigation_token` + `api_token` (+ TTLs).
-4. Server returns **only** browser-safe tokens to the iframe path.
-5. If Looker returns `session_reference_token_ttl == 0`, Layer B is dead → acquire again (Layer A may still be fine).
-
-The server is the only party allowed to hold long-lived handles and to call Looker Admin APIs.
-
----
-
-## 5. Logout: same user, two browsers
-
-Each browser has its own cookie + its own in-memory `host_access_token`. Server may have **one HostSession per cookie** (or per tab strategy), not “one global user flag” unless you build that.
-
-**Close session in browser 1 only**
-
-1. Browser 1 → logout.
-2. Server: revoke that HostSession, revoke Auth0 refresh if you use it, call Looker end-session if a `session_reference_token` exists, clear cookie.
-3. Browser 1: cookie gone, memory tokens gone → logged out.
-4. Browser 2: still has its cookie and tokens → **still logged in** until its host session is revoked or cookies/tokens expire.
-
-To log out **everywhere**, the server must revoke **all** HostSessions (and Auth0 refresh / Looker sessions) for that user id — not only the current cookie. That is a deliberate product choice; cookieless does not give it for free.
-
----
-
-## 6. Is a token valid? Is the user logged in?
-
-There is no single global “am I logged in?” bit. Check by layer and by handle:
-
-
-| Check                   | How                                                                                                  |
-| ----------------------- | ---------------------------------------------------------------------------------------------------- |
-| Host cookie session     | Server: cookie → HostSession exists and not revoked                                                  |
-| `host_access_token`     | Verify JWT signature + `exp` (+ `jti` if you track revoke)                                           |
-| Auth0 refresh           | Call Auth0; failure / revoke = dead                                                                  |
-| Looker nav/api          | Own `exp` / TTL; iframe may also fire `session:expired`                                              |
-| Looker session identity | `generate_tokens` / end-session against `session_reference_token`; `ttl == 0` ⇒ session dead         |
-| “Logged in” for UX      | Cookie + live HostSession (and optionally a valid host JWT). Looker embed up is a *second* question. |
-
-
-Observability (as in the lab): snapshot of presence, `exp`, revoked/consumed flags, and an event log beat guessing from the iframe alone.
-
----
-
-## 7. Modules to extract later
-
-Keep boundaries hard so cookieless stays modular:
-
-1. **Auth0 login** — authorize, callback, logout, PKCE.
-2. **Host session** — server record, opaque cookie, mint/verify `host_access_token`.
-3. **Looker bridge** — acquire, generate, end; map browser-safe vs server-only tokens.
-4. **Renewal** — host refresh path; Looker generate path; freeze/failure behavior.
-5. **Logout / revoke** — per-browser vs all-sessions; Auth0 revoke + Looker end + cookie clear.
-
-Do not mix: iframe must never see `session_reference_token` or Auth0 refresh. Host JWT must not become a long-lived cookie.
-
----
-
-## One-line summary
-
-Cookieless Looker = **server holds identity and long-lived handles; browser only gets short-lived tokens and an opaque host cookie; renew is server-side minting; logout is per host session unless you revoke all sessions for that user.**
+The server owns durable identity and renewal; the browser gets only an opaque
+host handle and short-lived tokens; logout remains per HostSession unless the
+application deliberately revokes every session for that user.

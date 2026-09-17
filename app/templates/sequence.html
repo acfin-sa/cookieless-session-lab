@@ -11,7 +11,7 @@
         <div>
             <p class="eyebrow">Happy path</p>
             <h1>Sequence — nested cookieless sessions</h1>
-            <p class="hint">Rendered from <code>docs/sequence-happy-path.mmd</code> at request time.</p>
+            <p class="hint">Rendered from <code>docs/sequence-happy-path.mmd</code> at request time. This is the happy-path raw <code>postMessage</code> flow, not the complete Embed SDK flow or failure matrix.</p>
             {% if logged_in and user_name %}
             <p class="who">{{ user_name }}{% if user_email %}{% if user_email != user_name %} · {{ user_email }}{% endif %}{% endif %}</p>
             {% endif %}
