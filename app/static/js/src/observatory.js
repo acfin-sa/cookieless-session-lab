@@ -178,18 +178,78 @@ function applyTokenHighlights() {
   });
 }
 
-function ganttRows() {
-  const rows = [];
-  for (const token of snapshot.tokens) {
-    rows.push(token);
+const GANTT_LANES = [
+  {
+    id: "auth0",
+    label: "Auth0",
+    fill: "#141922",
+    labelFill: "#8b97ab",
+    emphasized: false,
+  },
+  {
+    id: "embed-sdk",
+    label: "Looker Embed SDK",
+    fill: "#1a283c",
+    labelFill: "#6cb6ff",
+    emphasized: true,
+  },
+  {
+    id: "iframe",
+    label: "iframe",
+    fill: "#12161e",
+    labelFill: "#8b97ab",
+    emphasized: false,
+  },
+];
+
+function tokenLaneId(token) {
+  if (String(token.id || "").startsWith("iframe_session")) {
+    return "iframe";
   }
-  for (const iframeSession of snapshot.iframe_sessions || []) {
-    rows.push(iframeSession);
+  if (token.layer === "A") {
+    return "auth0";
   }
-  if (snapshot.iframe_session && !(snapshot.iframe_sessions || []).length) {
-    rows.push(snapshot.iframe_session);
+  return "embed-sdk";
+}
+
+function ganttLaneRows(laneId) {
+  if (laneId === "iframe") {
+    const iframeSessions = [...(snapshot.iframe_sessions || [])];
+    if (iframeSessions.length === 0 && snapshot.iframe_session) {
+      iframeSessions.push(snapshot.iframe_session);
+    }
+    return iframeSessions;
   }
-  return rows;
+  return (snapshot.tokens || []).filter((token) => tokenLaneId(token) === laneId);
+}
+
+function ganttLaneLayout() {
+  const lanes = [];
+  const laneGap = 10;
+  let y = 8;
+  for (const spec of GANTT_LANES) {
+    const rows = ganttLaneRows(spec.id);
+    if (rows.length === 0) {
+      continue;
+    }
+    const headerHeight = spec.emphasized ? 24 : 18;
+    const rowHeight = spec.emphasized ? 30 : 26;
+    const padBottom = spec.emphasized ? 10 : 6;
+    const top = y;
+    const height = headerHeight + rows.length * rowHeight + padBottom;
+    lanes.push({
+      ...spec,
+      rows,
+      top,
+      height,
+      headerHeight,
+      rowHeight,
+      contentTop: top + headerHeight,
+      bottom: top + height,
+    });
+    y += height + laneGap;
+  }
+  return { lanes, height: y - laneGap + 6, laneGap };
 }
 
 function renderGantt(root) {
@@ -199,50 +259,12 @@ function renderGantt(root) {
   const t0 = Date.parse(snapshot.login_started_at);
   const now = Date.now();
   const horizon = Math.max(now - t0 + 60_000, 12 * 60_000);
-  const rowHeight = 28;
   const left = 196;
   const width = 720;
-  const rows = ganttRows();
-  const height = 40 + rows.length * rowHeight;
+  const { lanes, height, laneGap } = ganttLaneLayout();
   const x = (ms) => left + ((ms - t0) / horizon) * (width - left - 16);
   const parts = [];
-  parts.push(`<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}">`);
-  rows.forEach((token, index) => {
-    const y = 24 + index * rowHeight;
-    const issued = token.issued_at ? Date.parse(token.issued_at) : t0;
-    const openEnded = String(token.id || "").startsWith("iframe_session") && !token.expires_at && token.state === "alive";
-    const expires = token.expires_at ? Date.parse(token.expires_at) : (openEnded ? now : now + 60_000);
-    const x1 = x(issued);
-    const x2 = Math.max(x1 + 4, x(Math.min(expires, t0 + horizon)));
-    const state = currentTokenState(token);
-    const color = {
-      alive: "#3dd68c",
-      expiring: "#f0b429",
-      expired: "#ef5b5b",
-      consumed: "#b57bff",
-      revoked: "#c45c5c",
-      unborn: "#5b6578",
-    }[state];
-    parts.push(`<text x="8" y="${y + 12}" fill="#8b97ab" font-size="11">${escapeHtml(token.name || token.id)}</text>`);
-    if (token.present || token.state !== "unborn") {
-      parts.push(`<rect x="${x1}" y="${y}" width="${x2 - x1}" height="14" rx="3" fill="${color}" opacity="0.85"></rect>`);
-    }
-    if (token.id === "navigation_token" || token.id === "api_token") {
-      const windowStart = expires - EXPIRING_WINDOW_SECONDS * 1000;
-      const wx1 = x(windowStart);
-      const wx2 = x(expires);
-      parts.push(`<rect x="${wx1}" y="${y}" width="${Math.max(0, wx2 - wx1)}" height="14" fill="url(#hatch)"></rect>`);
-    }
-  });
-  for (const [index, marker] of (snapshot.refresh_markers || []).entries()) {
-    const at = marker.at || marker;
-    const process = marker.process || "token renew";
-    const mx = x(Date.parse(at));
-    parts.push(`<line x1="${mx}" x2="${mx}" y1="18" y2="${height - 8}" stroke="#6cb6ff" stroke-dasharray="3 3" pointer-events="none"></line>`);
-    parts.push(`<rect class="refresh-hit" data-refresh-index="${index}" data-refresh-process="${escapeHtml(process)}" x="${mx - 6}" y="18" width="12" height="${height - 26}" fill="transparent" cursor="pointer"></rect>`);
-  }
-  const nowX = x(now);
-  parts.push(`<line x1="${nowX}" x2="${nowX}" y1="8" y2="${height}" stroke="#e8eef7" pointer-events="none"></line>`);
+  parts.push(`<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" role="img" aria-label="Lifetime swimlane with Auth0, Looker Embed SDK, and iframe lanes">`);
   parts.push(`
     <defs>
       <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
@@ -250,6 +272,56 @@ function renderGantt(root) {
       </pattern>
     </defs>
   `);
+  for (const [laneIndex, lane] of lanes.entries()) {
+    parts.push(`<rect x="0" y="${lane.top}" width="${width}" height="${lane.height}" fill="${lane.fill}"></rect>`);
+    if (lane.emphasized) {
+      parts.push(`<rect x="0" y="${lane.top}" width="4" height="${lane.height}" fill="#6cb6ff"></rect>`);
+    }
+    if (laneIndex > 0) {
+      const separatorY = lane.top - laneGap / 2;
+      parts.push(`<line x1="0" x2="${width}" y1="${separatorY}" y2="${separatorY}" stroke="#c5cedb" stroke-width="2"></line>`);
+    }
+    const labelX = lane.emphasized ? 12 : 8;
+    parts.push(`<text x="${labelX}" y="${lane.top + lane.headerHeight - 5}" fill="${lane.labelFill}" font-size="${lane.emphasized ? 12 : 10}" font-weight="700">${escapeHtml(lane.label)}</text>`);
+    lane.rows.forEach((token, index) => {
+      const y = lane.contentTop + index * lane.rowHeight + (lane.rowHeight - 14) / 2;
+      const issued = token.issued_at ? Date.parse(token.issued_at) : t0;
+      const openEnded = String(token.id || "").startsWith("iframe_session") && !token.expires_at && token.state === "alive";
+      const expires = token.expires_at ? Date.parse(token.expires_at) : (openEnded ? now : now + 60_000);
+      const x1 = x(issued);
+      const x2 = Math.max(x1 + 4, x(Math.min(expires, t0 + horizon)));
+      const state = currentTokenState(token);
+      const color = {
+        alive: "#3dd68c",
+        expiring: "#f0b429",
+        expired: "#ef5b5b",
+        consumed: "#b57bff",
+        revoked: "#c45c5c",
+        unborn: "#5b6578",
+      }[state];
+      parts.push(`<text x="10" y="${y + 11}" fill="#c5cedb" font-size="11">${escapeHtml(token.name || token.id)}</text>`);
+      if (token.present || token.state !== "unborn") {
+        parts.push(`<rect x="${x1}" y="${y}" width="${x2 - x1}" height="14" rx="3" fill="${color}" opacity="0.85"></rect>`);
+      }
+      if (token.id === "navigation_token" || token.id === "api_token") {
+        const windowStart = expires - EXPIRING_WINDOW_SECONDS * 1000;
+        const wx1 = x(windowStart);
+        const wx2 = x(expires);
+        parts.push(`<rect x="${wx1}" y="${y}" width="${Math.max(0, wx2 - wx1)}" height="14" fill="url(#hatch)"></rect>`);
+      }
+    });
+  }
+  const chartTop = lanes[0]?.top ?? 8;
+  const chartBottom = lanes[lanes.length - 1]?.bottom ?? height;
+  for (const [index, marker] of (snapshot.refresh_markers || []).entries()) {
+    const at = marker.at || marker;
+    const process = marker.process || "token renew";
+    const mx = x(Date.parse(at));
+    parts.push(`<line x1="${mx}" x2="${mx}" y1="${chartTop}" y2="${chartBottom}" stroke="#6cb6ff" stroke-dasharray="3 3" pointer-events="none"></line>`);
+    parts.push(`<rect class="refresh-hit" data-refresh-index="${index}" data-refresh-process="${escapeHtml(process)}" x="${mx - 6}" y="${chartTop}" width="12" height="${Math.max(0, chartBottom - chartTop)}" fill="transparent" cursor="pointer"></rect>`);
+  }
+  const nowX = x(now);
+  parts.push(`<line x1="${nowX}" x2="${nowX}" y1="${chartTop}" y2="${chartBottom}" stroke="#e8eef7" pointer-events="none"></line>`);
   parts.push("</svg>");
   const labelStillOpen = refreshLabelIndex !== null && Date.now() < refreshLabelUntil;
   const openMarker = labelStillOpen ? (snapshot.refresh_markers || [])[refreshLabelIndex] : null;

@@ -339,7 +339,7 @@ a.btn { text-decoration: none; display: inline-block; }
   background: var(--ink);
 }
 
-.gantt { position: relative; overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.gantt { position: relative; overflow-x: auto; background: #10141c; border: 1px solid var(--line); border-radius: 8px; }
 .gantt svg { display: block; min-width: 640px; }
 .gantt-refresh-label {
   position: absolute;
