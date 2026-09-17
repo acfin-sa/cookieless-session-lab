@@ -173,7 +173,7 @@ def acquire_embed_session(session: HostSession, user_agent: str) -> dict[str, An
         session,
         method="Looker POST /embed/cookieless_session/acquire",
         actor="Looker API",
-        summary="acquire returned browser-safe tokens; session_reference_token stored on server",
+        summary="Acquire returned JWTs; session_reference_token stored on server",
         tokens_in=["session_reference_token"] if existing_reference else [],
         tokens_out=[
             "session_reference_token",
@@ -201,7 +201,7 @@ def generate_embed_tokens(session: HostSession, user_agent: str) -> dict[str, An
             session,
             method="PUT /api/looker/generate-embed-tokens",
             actor="Host API",
-            summary="freeze_token_refresh is on — refusing to rotate nav/api tokens",
+            summary="freeze_token_refresh is on — can't rotate nav/api tokens",
             tokens_in=["host_access_token", "session_reference_token"],
             tokens_out=[],
             ok=True,
@@ -230,7 +230,7 @@ def generate_embed_tokens(session: HostSession, user_agent: str) -> dict[str, An
 
     if not session.looker_session_reference_token:
         raise LookerSessionDead(
-            "No session_reference_token on the server. Acquire again, or you dropped it."
+            "No session_reference_token on the server. Must Acquire again."
         )
 
     sdk = get_looker_sdk()
@@ -265,7 +265,7 @@ def generate_embed_tokens(session: HostSession, user_agent: str) -> dict[str, An
             session,
             method="Looker PUT /embed/cookieless_session/generate_tokens",
             actor="Looker API",
-            summary="session_reference_token_ttl == 0 — Looker session is dead; re-acquire required",
+            summary="session_reference_token_ttl == 0 — Must re-acquire",
             tokens_in=["session_reference_token", "navigation_token", "api_token"],
             tokens_out=[],
             ok=False,
@@ -296,7 +296,7 @@ def generate_embed_tokens(session: HostSession, user_agent: str) -> dict[str, An
         session,
         method="Looker PUT /embed/cookieless_session/generate_tokens",
         actor="Looker API",
-        summary="rotated navigation_token and api_token; session_reference_token not returned to browser",
+        summary="Rotated navigation_token and api_token.",
         tokens_in=["session_reference_token", "navigation_token", "api_token"],
         tokens_out=["navigation_token", "api_token", "session_reference_token"],
         ok=True,
@@ -394,7 +394,7 @@ def drop_session_reference(session: HostSession) -> None:
         session,
         method="Drop session_reference on server",
         actor="Host API",
-        summary="host forgot session_reference_token. Looker session still exists until TTL, but this BFF cannot refresh it.",
+        summary="host forgot session_reference_token. Looker session still exists until TTL.",
         tokens_in=["session_reference_token"],
         tokens_out=[],
         ok=True,

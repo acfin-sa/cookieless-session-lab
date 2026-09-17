@@ -323,7 +323,16 @@ function findGanttToken(tokenId) {
   return null;
 }
 
+const TOKENS_WITHOUT_EXPIRY = new Set(["auth0_refresh", "host_session_reference"]);
+
+function tokenHasNoExpiry(token) {
+  return TOKENS_WITHOUT_EXPIRY.has(token.id) || (!token.expires_at && !token.planned_expires_at);
+}
+
 function ganttRemainingSeconds(token) {
+  if (TOKENS_WITHOUT_EXPIRY.has(token.id)) {
+    return null;
+  }
   const fromExpires = remainingSeconds(token);
   if (fromExpires !== null) {
     return fromExpires;
@@ -335,10 +344,19 @@ function ganttRemainingSeconds(token) {
 }
 
 function ganttBarLabelText(token) {
+  const name = token.name || token.id;
   const state = currentTokenState(token);
+  if (tokenHasNoExpiry(token) && (state === "alive" || state === "unborn")) {
+    return `${name}: ${state}, does not expire`;
+  }
   const remaining = ganttRemainingSeconds(token);
-  const ttlPart = remaining === null ? "no TTL" : formatClock(remaining);
-  return `${token.name || token.id}: ${state} · ${ttlPart}`;
+  if (state === "consumed" || state === "revoked" || state === "expired" || state === "unborn") {
+    return `${name}: ${state}`;
+  }
+  if (remaining === null) {
+    return `${name}: ${state}, does not expire`;
+  }
+  return `${name}: ${state} for ${formatClock(remaining)}`;
 }
 
 function clearRefreshLabelTimer() {
@@ -450,6 +468,7 @@ function renderGantt(root) {
   root.innerHTML = parts.join("");
 }
 
+// live event log table
 function renderEvents(root) {
   if (!snapshot) {
     return;

@@ -101,7 +101,7 @@ async def refresh_host_access_token(request: Request):
         session,
         method="POST /api/host/refresh",
         actor="Host API",
-        summary="new host_access_token; previous jti will 401",
+        summary="Minted new host_access_token",
         tokens_in=["host_session_id cookie", "auth0_refresh"],
         tokens_out=["host_access_token"],
         ok=True,
