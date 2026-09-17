@@ -1,7 +1,6 @@
 let hostAccessToken = null;
 let hostAccessExpiresAt = null;
 let refreshTimer = null;
-let userInfo = null;
 
 function decodeExp(token) {
   try {
@@ -46,9 +45,6 @@ export async function api(path, options = {}) {
     if (!retry.ok) {
       throw new Error(await parseError(retry));
     }
-    if (retry.status === 204) {
-      return null;
-    }
     return retry.json();
   }
   if (!response.ok) {
@@ -56,15 +52,11 @@ export async function api(path, options = {}) {
     error.status = response.status;
     throw error;
   }
-  if (response.status === 204) {
-    return null;
-  }
   return response.json();
 }
 
 function rememberToken(payload) {
   hostAccessToken = payload.host_access_token;
-  userInfo = payload.user || userInfo;
   hostAccessExpiresAt = payload.expires_at
     ? Date.parse(payload.expires_at)
     : decodeExp(hostAccessToken);

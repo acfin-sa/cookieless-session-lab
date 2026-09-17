@@ -28,22 +28,33 @@ views_router = APIRouter()
 
 
 def _architecture_markdown_source() -> str:
-    """ARCHITECTURE.md is the single source of truth; /architecture renders it."""
+    """ARCHITECTURE.md is the single source of truth; /architecture injects live TTLs."""
     source = ARCHITECTURE_PATH.read_text(encoding="utf-8")
-    # Show live configured values on the web page (env may override config.py defaults).
-    source = source.replace(
-        "| `HOST_ACCESS_TOKEN_TTL_SECONDS` | `app/config.py` (default **200** s) |",
-        f"| `HOST_ACCESS_TOKEN_TTL_SECONDS` | `app/config.py` (**{HOST_ACCESS_TOKEN_TTL_SECONDS}** s) |",
-    )
-    source = source.replace(
-        "| `LOOKER_EMBED_SESSION_LENGTH` | `.env` (default **720** s) |",
-        f"| `LOOKER_EMBED_SESSION_LENGTH` | `.env` (**{LOOKER_EMBED_SESSION_LENGTH}** s) |",
-    )
-    source = source.replace(
-        "memory only (HOST_ACCESS_TOKEN_TTL_SECONDS, default 200 s)",
+    live_values = {
+        "HOST_ACCESS_TOKEN_TTL_SECONDS": f"**{HOST_ACCESS_TOKEN_TTL_SECONDS}** s",
+        "LOOKER_EMBED_SESSION_LENGTH": f"**{LOOKER_EMBED_SESSION_LENGTH}** s",
+    }
+    for marker, replacement in live_values.items():
+        source = _replace_live_ttl_marker(source, marker, replacement)
+    source = re.sub(
+        r"memory only \(HOST_ACCESS_TOKEN_TTL_SECONDS = \d+ s\)",
         f"memory only (HOST_ACCESS_TOKEN_TTL_SECONDS = {HOST_ACCESS_TOKEN_TTL_SECONDS} s)",
+        source,
+        count=1,
     )
     return source
+
+
+def _replace_live_ttl_marker(source: str, marker: str, replacement: str) -> str:
+    start = f"<!--LIVE:{marker}-->"
+    end = f"<!--/LIVE:{marker}-->"
+    before, found, rest = source.partition(start)
+    if not found:
+        return source
+    _ignored, found_end, after = rest.partition(end)
+    if not found_end:
+        return source
+    return f"{before}{replacement}{after}"
 
 
 def _render_architecture_html() -> str:

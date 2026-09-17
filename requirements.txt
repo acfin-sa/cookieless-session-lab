@@ -7,6 +7,5 @@ authlib
 pyjwt
 httpx
 itsdangerous
-python-multipart
 looker-sdk
 markdown

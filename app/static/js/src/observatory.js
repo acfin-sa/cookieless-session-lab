@@ -186,9 +186,6 @@ function ganttRows() {
   for (const iframeSession of snapshot.iframe_sessions || []) {
     rows.push(iframeSession);
   }
-  if (snapshot.iframe_session && !(snapshot.iframe_sessions || []).length) {
-    rows.push(snapshot.iframe_session);
-  }
   return rows;
 }
 
@@ -277,9 +274,9 @@ function renderEvents(root) {
     row.dataset.tokens = [...(event.tokens_in || []), ...(event.tokens_out || [])].join(",");
     const when = event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : "";
     row.innerHTML = `
-      <div><span class="when">${when}</span> · <span class="actor">${event.actor}</span></div>
-      <div><strong>${event.method}</strong></div>
-      <div>${event.summary || ""}</div>
+      <div><span class="when">${when}</span> · <span class="actor">${escapeHtml(event.actor)}</span></div>
+      <div><strong>${escapeHtml(event.method)}</strong></div>
+      <div>${escapeHtml(event.summary || "")}</div>
       <div class="when">in: ${(event.tokens_in || []).join(", ") || "—"} · out: ${(event.tokens_out || []).join(", ") || "—"}</div>
     `;
     root.appendChild(row);
@@ -298,7 +295,7 @@ const CATALOG_GROUPS = [
 ];
 
 function catalogGroupId(method) {
-  return method.group || method.catalog_group || "";
+  return method.group || "";
 }
 
 function joinCatalogList(values) {
@@ -370,7 +367,7 @@ function renderCatalog(table, map) {
   }
 }
 
-export function highlightTokens(tokenIds, durationMs = TOKEN_HIGHLIGHT_DURATION_MS) {
+function highlightTokens(tokenIds, durationMs = TOKEN_HIGHLIGHT_DURATION_MS) {
   highlightedTokenIds = tokenIds;
   highlightUntil = Date.now() + durationMs;
   applyTokenHighlights();
@@ -384,7 +381,6 @@ export function navApiRemaining() {
   return {
     navigation: remainingSeconds(byId.navigation_token || {}),
     api: remainingSeconds(byId.api_token || {}),
-    flags: snapshot.flags,
   };
 }
 
@@ -427,6 +423,10 @@ export function bindObservatory(elements) {
     renderEvents(elements.events);
     if (elements.freeze) {
       elements.freeze.checked = Boolean(snapshot.flags.freeze_token_refresh);
+      const freezeWinsHint = document.getElementById("freeze-wins-hint");
+      if (freezeWinsHint) {
+        freezeWinsHint.classList.toggle("hidden", !elements.freeze.checked);
+      }
     }
     if (elements.ua) {
       elements.ua.checked = Boolean(snapshot.flags.force_user_agent_mismatch);
@@ -443,6 +443,4 @@ export function bindObservatory(elements) {
   setInterval(() => {
     poll().catch((error) => console.warn(error));
   }, 4000);
-
-  return { poll };
 }

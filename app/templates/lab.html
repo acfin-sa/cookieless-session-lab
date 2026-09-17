@@ -29,6 +29,7 @@
             <input type="checkbox" id="toggle-ua" />
             Force User-Agent mismatch
         </label>
+        <span id="freeze-wins-hint" class="hint hidden">Freeze is on — generate_tokens is not called, so User-Agent mismatch will not fire.</span>
         <button type="button" title="POST /api/lab/drop-session-reference" id="btn-drop-ref">Drop session_reference on server</button>
         <button type="button" title="POST /api/looker/end-embed-session" id="btn-end-looker">End Looker session</button>
     </section>
@@ -51,7 +52,7 @@
 
             <section>
                 <h2>2. Token constellation</h2>
-                <p class="hint">hola</p>
+                <p class="hint">Eight cards, both layers. Nav and api keep independent JWT clocks; iframe session:expired is session-level.</p>
                 <div id="token-cards" class="token-grid"></div>
             </section>
 
@@ -69,11 +70,11 @@
                 <button type="button" class="tab active" data-tab="sdk">Embed SDK</button>
                 <button type="button" class="tab" data-tab="postmessage">Raw postMessage</button>
             </div>
-            <p class="hint" id="tab-caption">
-                The Embed SDK tab uses Looker’s JavaScript library to manage the iframe and tokens;
-                <br>server asks Looker for short-lived tokens and feeds them to the iframe.
-                <br>
-                <br>The Raw postMessage tab directly exchange tokens between the iframe and the window.
+            <p class="hint" id="tab-caption-sdk">
+                SDK tab: initCookieless moves tokens for you. Compare with the postMessage tab.
+            </p>
+            <p class="hint hidden" id="tab-caption-pm">
+                Raw postMessage tab: you will see session:tokens:request and session:tokens in the log.
             </p>
             <div class="iframe-stage" id="stage-sdk">
                 <div id="embed-sdk-root" class="embed-slot"></div>

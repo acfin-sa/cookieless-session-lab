@@ -108,7 +108,19 @@ async def acquire(request: Request):
     except Exception as error:
         if _looker_unreachable(error):
             return _looker_http_error(session, "Looker POST /embed/cookieless_session/acquire", error)
-        return JSONResponse({"detail": str(error)}, status_code=502)
+        detail = str(error)
+        log_event(
+            session,
+            method="Looker POST /embed/cookieless_session/acquire",
+            actor="Looker API",
+            summary=detail,
+            tokens_in=["session_reference_token"],
+            tokens_out=[],
+            ok=False,
+            status_code=502,
+            error=detail,
+        )
+        return JSONResponse({"detail": detail}, status_code=502)
     if "session_reference_token" in payload:
         payload = {key: value for key, value in payload.items() if key != "session_reference_token"}
     return payload
@@ -124,7 +136,9 @@ async def generate(request: Request):
     # WHY: the iframe is an untrusted peer. It may ask for tokens; it may not mint them
     #      or tell us which session_reference to use. Body nav/api are ignored for identity.
     session = require_bearer_session(request)
-    if session.force_user_agent_mismatch:
+    if session.freeze_token_refresh:
+        user_agent = request_user_agent(request)
+    elif session.force_user_agent_mismatch:
         user_agent = LOOKER_MISMATCH_USER_AGENT
         log_event(
             session,
@@ -173,19 +187,21 @@ async def generate(request: Request):
                 "Looker PUT /embed/cookieless_session/generate_tokens",
                 error,
             )
-        return JSONResponse({"detail": str(error)}, status_code=502)
+        detail = str(error)
+        log_event(
+            session,
+            method="Looker PUT /embed/cookieless_session/generate_tokens",
+            actor="Looker API",
+            summary=detail,
+            tokens_in=["session_reference_token"],
+            tokens_out=[],
+            ok=False,
+            status_code=502,
+            error=detail,
+        )
+        return JSONResponse({"detail": detail}, status_code=502)
     if "session_reference_token" in payload:
         payload = {key: value for key, value in payload.items() if key != "session_reference_token"}
-    log_event(
-        session,
-        method="PUT /api/looker/generate-embed-tokens",
-        actor="Host API",
-        summary="returned rotated nav/api tokens; session_reference_token omitted",
-        tokens_in=["host_access_token"],
-        tokens_out=["navigation_token", "api_token"],
-        ok=True,
-        status_code=200,
-    )
     return payload
 
 

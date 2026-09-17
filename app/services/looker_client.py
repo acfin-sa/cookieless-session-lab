@@ -117,24 +117,10 @@ def acquire_embed_session(session: HostSession, user_agent: str) -> dict[str, An
         embed_domain=embed_user["embed_domain"],
         session_reference_token=existing_reference,
     )
-    try:
-        response = sdk.acquire_embed_cookieless_session(
-            body=body,
-            transport_options={"headers": {"User-Agent": user_agent}},
-        )
-    except Exception as exc:
-        log_event(
-            session,
-            method="Looker POST /embed/cookieless_session/acquire",
-            actor="Looker API",
-            summary=f"acquire failed: {_looker_error_detail(exc)}",
-            tokens_in=["session_reference_token"] if existing_reference else [],
-            tokens_out=[],
-            ok=False,
-            status_code=getattr(exc, "status", None) or 400,
-            error=_looker_error_detail(exc),
-        )
-        raise
+    response = sdk.acquire_embed_cookieless_session(
+        body=body,
+        transport_options={"headers": {"User-Agent": user_agent}},
+    )
 
     now = utc_now()
     session.looker_session_reference_token = response.session_reference_token
@@ -233,38 +219,14 @@ def generate_embed_tokens(session: HostSession, user_agent: str) -> dict[str, An
         navigation_token=session.looker_navigation_token,
         api_token=session.looker_api_token,
     )
-    try:
-        response = sdk.generate_tokens_for_cookieless_session(
-            body=body,
-            transport_options={"headers": {"User-Agent": user_agent}},
-        )
-    except Exception as exc:
-        log_event(
-            session,
-            method="Looker PUT /embed/cookieless_session/generate_tokens",
-            actor="Looker API",
-            summary=f"generate_tokens failed: {_looker_error_detail(exc)}",
-            tokens_in=["session_reference_token", "navigation_token", "api_token"],
-            tokens_out=[],
-            ok=False,
-            status_code=getattr(exc, "status", None) or 400,
-            error=_looker_error_detail(exc),
-        )
-        raise
+    response = sdk.generate_tokens_for_cookieless_session(
+        body=body,
+        transport_options={"headers": {"User-Agent": user_agent}},
+    )
 
     session_ttl = int(response.session_reference_token_ttl or 0)
     if session_ttl == 0:
         session.looker_session_revoked = True
-        log_event(
-            session,
-            method="Looker PUT /embed/cookieless_session/generate_tokens",
-            actor="Looker API",
-            summary="session_reference_token_ttl == 0 — Looker session is dead; re-acquire required",
-            tokens_in=["session_reference_token", "navigation_token", "api_token"],
-            tokens_out=[],
-            ok=False,
-            status_code=200,
-        )
         raise LookerSessionDead("Looker cookieless session expired (session_reference_token_ttl == 0)")
 
     now = utc_now()
@@ -331,17 +293,6 @@ def end_embed_session(session: HostSession, user_agent: str) -> None:
         detail = _looker_error_detail(exc)
         status = getattr(exc, "status", None) or 400
         if status not in {404, 400}:
-            log_event(
-                session,
-                method="Looker DELETE /embed/cookieless_session/{session_reference_token}",
-                actor="Looker API",
-                summary=f"delete failed: {detail}",
-                tokens_in=["session_reference_token"],
-                tokens_out=[],
-                ok=False,
-                status_code=status,
-                error=detail,
-            )
             raise
         log_event(
             session,

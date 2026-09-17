@@ -60,11 +60,8 @@ class HostSession:
 
     auth0_refresh_token: str | None = None
     auth0_access_token: str | None = None
-    auth0_id_token: str | None = None
     auth0_access_issued_at: datetime | None = None
     auth0_access_expires_at: datetime | None = None
-    auth0_id_issued_at: datetime | None = None
-    auth0_id_expires_at: datetime | None = None
 
     host_access_token: str | None = None
     host_access_token_jti: str | None = None
@@ -104,6 +101,8 @@ class HostSession:
 
     def record_refresh_marker(self, process: str) -> None:
         self.refresh_markers.append({"at": utc_now(), "process": process})
+        if len(self.refresh_markers) > 100:
+            self.refresh_markers = self.refresh_markers[-100:]
 
     def iframe_session_expired(self) -> bool:
         return self.looker_sdk_iframe_expired or self.looker_pm_iframe_expired

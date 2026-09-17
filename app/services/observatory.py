@@ -284,7 +284,6 @@ def build_snapshot(session: HostSession) -> dict[str, Any]:
             "force_user_agent_mismatch": session.force_user_agent_mismatch,
             "session_reference_dropped": session.session_reference_dropped,
             "looker_session_revoked": session.looker_session_revoked,
-            "looker_iframe_session_expired": session.iframe_session_expired(),
         },
         "iframe_sessions": [iframe_client_snapshot(session, now, spec) for spec in IFRAME_CLIENTS],
         "tokens": tokens,
@@ -296,5 +295,4 @@ def build_snapshot(session: HostSession) -> dict[str, Any]:
             }
             for marker in session.refresh_markers
         ],
-        "looker_bound_user_agent": session.user_agent,
     }

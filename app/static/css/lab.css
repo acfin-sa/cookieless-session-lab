@@ -125,7 +125,6 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 }
 .btn.primary, button.primary { background: #1f4d8a; border-color: #3d7bd6; }
 .btn.danger { background: #5a2020; border-color: #8a3a3a; }
-.btn.ghost { background: transparent; }
 a.btn { text-decoration: none; display: inline-block; }
 
 .lab-header {
@@ -236,12 +235,6 @@ a.btn { text-decoration: none; display: inline-block; }
   grid-template-columns: repeat(2, 1fr);
   gap: 0.65rem;
 }
-.constellation-status { margin: 0 0 0.65rem; }
-.layer-b-row {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.65rem;
-}
 .layer-b-cell {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -264,7 +257,6 @@ a.btn { text-decoration: none; display: inline-block; }
 .token-card h3 { margin: 0; font-size: 0.85rem; }
 .layer { font-size: 0.7rem; color: var(--accent); }
 .storage { color: var(--muted); font-size: 0.72rem; margin: 0.35rem 0 0; }
-.token-card .value { margin: 0.45rem 0; font-family: ui-monospace, monospace; }
 .token-card .meta { color: var(--muted); font-size: 0.72rem; margin: 0.35rem 0 0; }
 .token-card .meta span,
 .token-card .state span { display: block; }
@@ -323,21 +315,6 @@ a.btn { text-decoration: none; display: inline-block; }
 .gantt-legend .swatch.state-consumed { background: var(--consumed); }
 .gantt-legend .swatch.state-revoked { background: var(--revoked); }
 .gantt-legend .swatch.state-unborn { background: var(--unborn); }
-.gantt-legend .swatch.hatch {
-  background: repeating-linear-gradient(
-    35deg,
-    var(--expiring),
-    var(--expiring) 3px,
-    #10141c 3px,
-    #10141c 6px
-  );
-}
-.gantt-legend .swatch.now-line {
-  width: 2px;
-  height: 12px;
-  border-radius: 0;
-  background: var(--ink);
-}
 
 .gantt { position: relative; overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 .gantt svg { display: block; min-width: 640px; }
@@ -422,7 +399,6 @@ th { color: var(--muted); font-weight: 600; }
   .resize-handle { display: none; }
   .observatory { flex-basis: auto !important; max-height: 70vh; }
   .token-grid { grid-template-columns: 1fr; }
-  .layer-b-row { grid-template-columns: 1fr; }
   .iframe-pane {
     height: 45vh;
     min-height: 280px;

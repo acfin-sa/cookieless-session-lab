@@ -28,22 +28,15 @@ function showLabError(message) {
   );
 }
 
-function bindSplitPanel() {
-  const grid = document.querySelector(".lab-grid");
-  const observatory = grid.querySelector(".observatory");
-  const handle = requireElement("lab-resize-handle");
-  const savedWidth = localStorage.getItem(SPLIT_STORAGE_KEY);
-  if (savedWidth) {
-    observatory.style.flexBasis = savedWidth;
-  }
-
+function bindDrag(handle, onMove, onStop) {
   let dragging = false;
+  const cursor = handle.classList.contains("resize-handle-row") ? "row-resize" : "col-resize";
 
   handle.addEventListener("mousedown", (event) => {
     event.preventDefault();
     dragging = true;
     handle.classList.add("dragging");
-    document.body.style.cursor = "col-resize";
+    document.body.style.cursor = cursor;
     document.body.style.userSelect = "none";
   });
 
@@ -51,11 +44,7 @@ function bindSplitPanel() {
     if (!dragging) {
       return;
     }
-    const rect = grid.getBoundingClientRect();
-    const minWidth = 280;
-    const maxWidth = rect.width - 280 - handle.offsetWidth;
-    const width = Math.min(maxWidth, Math.max(minWidth, event.clientX - rect.left));
-    observatory.style.flexBasis = `${width}px`;
+    onMove(event);
   });
 
   document.addEventListener("mouseup", () => {
@@ -66,8 +55,32 @@ function bindSplitPanel() {
     handle.classList.remove("dragging");
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
-    localStorage.setItem(SPLIT_STORAGE_KEY, observatory.style.flexBasis);
+    onStop();
   });
+}
+
+function bindSplitPanel() {
+  const grid = document.querySelector(".lab-grid");
+  const observatory = grid.querySelector(".observatory");
+  const handle = requireElement("lab-resize-handle");
+  const savedWidth = localStorage.getItem(SPLIT_STORAGE_KEY);
+  if (savedWidth) {
+    observatory.style.flexBasis = savedWidth;
+  }
+
+  bindDrag(
+    handle,
+    (event) => {
+      const rect = grid.getBoundingClientRect();
+      const minWidth = 280;
+      const maxWidth = rect.width - 280 - handle.offsetWidth;
+      const width = Math.min(maxWidth, Math.max(minWidth, event.clientX - rect.left));
+      observatory.style.flexBasis = `${width}px`;
+    },
+    () => {
+      localStorage.setItem(SPLIT_STORAGE_KEY, observatory.style.flexBasis);
+    }
+  );
 }
 
 function bindHeightSplit() {
@@ -78,36 +91,18 @@ function bindHeightSplit() {
     grid.style.height = savedHeight;
   }
 
-  let dragging = false;
-
-  handle.addEventListener("mousedown", (event) => {
-    event.preventDefault();
-    dragging = true;
-    handle.classList.add("dragging");
-    document.body.style.cursor = "row-resize";
-    document.body.style.userSelect = "none";
-  });
-
-  document.addEventListener("mousemove", (event) => {
-    if (!dragging) {
-      return;
+  bindDrag(
+    handle,
+    (event) => {
+      const rect = grid.getBoundingClientRect();
+      const minHeight = 280;
+      const height = Math.max(minHeight, event.clientY - rect.top);
+      grid.style.height = `${height}px`;
+    },
+    () => {
+      localStorage.setItem(HEIGHT_STORAGE_KEY, grid.style.height);
     }
-    const rect = grid.getBoundingClientRect();
-    const minHeight = 280;
-    const height = Math.max(minHeight, event.clientY - rect.top);
-    grid.style.height = `${height}px`;
-  });
-
-  document.addEventListener("mouseup", () => {
-    if (!dragging) {
-      return;
-    }
-    dragging = false;
-    handle.classList.remove("dragging");
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-    localStorage.setItem(HEIGHT_STORAGE_KEY, grid.style.height);
-  });
+  );
 }
 
 function updateOverlays() {
@@ -134,10 +129,8 @@ function setTab(tab) {
   });
   requireElement("stage-sdk").classList.toggle("hidden", tab !== "sdk");
   requireElement("stage-postmessage").classList.toggle("hidden", tab !== "postmessage");
-  requireElement("tab-caption").textContent =
-    tab === "sdk"
-      ? "SDK tab: initCookieless moves tokens for you. Compare with the postMessage tab."
-      : "Raw postMessage tab: you will see session:tokens:request and session:tokens in the log.";
+  requireElement("tab-caption-sdk").classList.toggle("hidden", tab !== "sdk");
+  requireElement("tab-caption-pm").classList.toggle("hidden", tab !== "postmessage");
 }
 
 async function startActiveTab() {
@@ -175,6 +168,7 @@ function initLabUi() {
   });
 
   bind("toggle-freeze", "change", async (event) => {
+    requireElement("freeze-wins-hint").classList.toggle("hidden", !event.target.checked);
     await api("/api/lab/controls", {
       method: "POST",
       body: JSON.stringify({ freeze_token_refresh: event.target.checked }),

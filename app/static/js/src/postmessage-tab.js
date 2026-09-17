@@ -73,15 +73,26 @@ async function onMessage(event) {
   if (!data) {
     return;
   }
-  if (data.type === "session:status" && data.expired) {
+  if (data.type === "session:status") {
+    if (data.expired) {
+      await reportRawEvent({
+        method: "session:status",
+        actor: "iframe postMessage",
+        summary: "iframe session:status expired=true — embed cannot keep working; session_reference not revoked. Nav/api JWT clocks are unchanged.",
+        tokens_in: ["iframe_session_postmessage"],
+        tokens_out: [],
+        ok: false,
+        expired: true,
+      });
+      return;
+    }
     await reportRawEvent({
       method: "session:status",
       actor: "iframe postMessage",
-      summary: "iframe session:status expired=true — embed cannot keep working; session_reference not revoked. Nav/api JWT clocks are unchanged.",
-      tokens_in: ["iframe_session_postmessage"],
+      summary: JSON.stringify({ expired: false, status: data.status }),
+      tokens_in: ["api_token", "navigation_token"],
       tokens_out: [],
-      ok: false,
-      expired: true,
+      ok: true,
     });
     return;
   }
@@ -115,6 +126,15 @@ async function onMessage(event) {
     });
     applicationTokens = { ...applicationTokens, ...tokens };
     sendTokens(iframeWindow, applicationTokens);
+    await reportRawEvent({
+      method: "PUT /api/looker/generate-embed-tokens",
+      actor: "Browser",
+      summary: tokens.frozen
+        ? "raw postMessage generate — refresh was frozen"
+        : "raw postMessage generate received rotated nav/api tokens",
+      tokens_in: ["host_access_token"],
+      tokens_out: ["navigation_token", "api_token"],
+    });
     await reportRawEvent({
       method: "postMessage session:tokens",
       actor: "Browser",
@@ -161,6 +181,13 @@ async function acquireAndMount(container) {
   const tokens = await api("/api/looker/acquire-embed-session", {
     method: "POST",
     body: "{}",
+  });
+  await reportRawEvent({
+    method: "POST /api/looker/acquire-embed-session",
+    actor: "Browser",
+    summary: "raw postMessage tab received browser-safe tokens",
+    tokens_in: ["host_access_token"],
+    tokens_out: ["authentication_token", "navigation_token", "api_token"],
   });
   applicationTokens = tokens;
   const url = cookielessLoginUrl(
