@@ -69,6 +69,16 @@ LOOKER_EMBED_PERMISSIONS = parse_csv_env(
     "LOOKER_EMBED_PERMISSIONS",
     "access_data,see_looks,see_user_dashboards",
 )
+LOOKER_EMBED_FILTER_PERIODO = os.getenv("LOOKER_EMBED_FILTER_PERIODO", "2 months").strip()
+LOOKER_EMBED_FILTER_GESTOR = os.getenv("LOOKER_EMBED_FILTER_GESTOR", "CORIL").strip()
+
+
+def looker_embed_cold_start_filters() -> dict[str, str]:
+    """Dashboard filter names stay on the host; the browser only receives values."""
+    return {
+        "Periodo": LOOKER_EMBED_FILTER_PERIODO,
+        "Gestor": LOOKER_EMBED_FILTER_GESTOR,
+    }
 
 HOST_ACCESS_TOKEN_TTL_SECONDS = 200
 HOST_SESSION_COOKIE = "host_session_id"
@@ -78,6 +88,10 @@ LOOKER_MISMATCH_USER_AGENT = "CookielessLab/ua-mismatch"
 TOKEN_METHOD_MAP_PATH = ROOT_DIR / "docs" / "token-method-map.json"
 SEQUENCE_DIAGRAM_PATH = ROOT_DIR / "docs" / "sequence-happy-path.mmd"
 ARCHITECTURE_PATH = ROOT_DIR / "ARCHITECTURE.md"
+MERMAID_MODULE_URL = os.getenv(
+    "MERMAID_MODULE_URL",
+    "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs",
+).strip()
 
 
 def cookie_secure() -> bool:

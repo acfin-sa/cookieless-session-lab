@@ -15,7 +15,9 @@ from config import (
     LOOKER_EMBED_DASHBOARD_ID,
     LOOKER_EMBED_HOST,
     LOOKER_EMBED_SESSION_LENGTH,
+    MERMAID_MODULE_URL,
     SEQUENCE_DIAGRAM_PATH,
+    looker_embed_cold_start_filters,
     public_url,
 )
 from services.host_session_auth import session_from_cookie
@@ -42,6 +44,7 @@ def looker_embed_page_config() -> dict:
         "lookerEmbedHost": LOOKER_EMBED_HOST,
         "lookerDashboardId": LOOKER_EMBED_DASHBOARD_ID,
         "embedDomain": APP_BASE_URL,
+        "coldStartDashboardFilters": looker_embed_cold_start_filters(),
     }
 
 
@@ -100,6 +103,7 @@ async def sequence(request: Request):
         name="sequence.html",
         context={
             "mermaid_source": mermaid_source,
+            "mermaid_module_url": MERMAID_MODULE_URL,
             "logged_in": session is not None and not session.host_session_revoked,
             "user_name": session.display_name() if session else None,
             "user_email": session.email() if session else None,

@@ -52,10 +52,9 @@ function reportEmbedSessionExpired(method, summary) {
   });
 }
 
-const COLD_START_DASHBOARD_FILTERS = {
-  Periodo: "2 months",
-  Gestor: "CORIL",
-};
+function coldStartDashboardFilters() {
+  return pageConfig.coldStartDashboardFilters || {};
+}
 
 function mountDashboard(containerSelector) {
   if (!embedSdk) {
@@ -68,7 +67,7 @@ function mountDashboard(containerSelector) {
     .withParams({
       embed_domain: pageConfig.embedDomain,
     })
-    .withFilters(COLD_START_DASHBOARD_FILTERS);
+    .withFilters(coldStartDashboardFilters());
   builder
     .on("session:status", (event) => {
       if (event?.expired) {

@@ -12,8 +12,8 @@
             <p class="eyebrow">Happy path</p>
             <h1>Sequence — nested cookieless sessions</h1>
             <p class="hint">Rendered from <code>docs/sequence-happy-path.mmd</code> at request time. This is the happy-path raw <code>postMessage</code> flow, not the complete Embed SDK flow or failure matrix.</p>
-            {% if logged_in and user_name %}
-            <p class="who">{{ user_name }}{% if user_email %}{% if user_email != user_name %} · {{ user_email }}{% endif %}{% endif %}</p>
+            {% if logged_in %}
+            <p class="who">{{ user_name or "Signed in" }}{% if user_email %}{% if user_email != user_name %} · {{ user_email }}{% endif %}{% endif %}</p>
             {% endif %}
         </div>
         <nav>
@@ -34,6 +34,7 @@
     </main>
 
     <script id="mermaid-source" type="application/json">{{ mermaid_source | tojson }}</script>
+    <script id="mermaid-module-url" type="application/json">{{ mermaid_module_url | tojson }}</script>
     <script type="module" src="/static/js/dist/sequence.js"></script>
 </body>
 </html>

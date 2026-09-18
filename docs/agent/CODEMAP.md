@@ -66,11 +66,13 @@ Relevant fields: Auth0 tokens + claims; host JWT + `jti`; Looker four tokens + T
 | Symbol | Where | Notes |
 | --- | --- | --- |
 | `LOOKER_EMBED_SESSION_LENGTH` | `.env` / `config.py` default 720 | Looker `session_length` at acquire |
+| `LOOKER_EMBED_FILTER_PERIODO` / `GESTOR` | `.env` / `config.py` | Embed SDK cold-start `withFilters`; via `page_config.coldStartDashboardFilters` |
 | `HOST_ACCESS_TOKEN_TTL_SECONDS` | `app/config.py` **hardcoded 200** | not `.env` |
 | `APP_KEY_SECRET` | `.env` | HS256 host JWT + SessionMiddleware |
 | `HOST_SESSION_COOKIE_MAX_AGE` | `host_session_auth.py` 12h | opaque cookie |
 | `LOOKER_MISMATCH_USER_AGENT` | `config.py` | generate-only teaching UA |
 | `APP_BASE_URL` | `.env` | callbacks, `embed_domain`, cookie Secure |
+| `MERMAID_MODULE_URL` | `.env` / `config.py` default pinned 11.17.2 | `/sequence` ESM import; not a floating `@11` tag |
 
 Auth0 token TTLs are tenant settings, not lab env.
 
