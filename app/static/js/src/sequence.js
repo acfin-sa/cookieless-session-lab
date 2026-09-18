@@ -3,8 +3,11 @@ import { renderMermaid } from "./mermaid-diagram.js";
 const target = document.getElementById("mermaid-target");
 const sourceNode = document.getElementById("mermaid-source");
 const mermaidModuleUrlNode = document.getElementById("mermaid-module-url");
-if (!target || !sourceNode || !mermaidModuleUrlNode) {
-  throw new Error("Missing mermaid target, source, or module URL on sequence.html");
+if (!target) {
+  throw new Error("Missing mermaid target on sequence.html");
+}
+if (!sourceNode) {
+  target.textContent = "Missing mermaid source on sequence.html";
 }
 
 const mermaidSource = JSON.parse(sourceNode.textContent);
