@@ -79,7 +79,7 @@ LOOKER_EMBED_PERMISSIONS = parse_csv_env(
     "LOOKER_EMBED_PERMISSIONS",
     "access_data,see_looks,see_user_dashboards",
 )
-LOOKER_EMBED_FILTER_PERIODO = os.getenv("LOOKER_EMBED_FILTER_PERIODO", "2 months").strip()
+LOOKER_EMBED_FILTER_PERIODO = os.getenv("LOOKER_EMBED_FILTER_PERIODO", "4 months").strip()
 LOOKER_EMBED_FILTER_GESTOR = os.getenv("LOOKER_EMBED_FILTER_GESTOR", "CORIL").strip()
 
 
