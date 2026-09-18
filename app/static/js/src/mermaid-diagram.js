@@ -1,3 +1,6 @@
+let mermaidInitialized = false;
+let diagramSeq = 0;
+
 export async function renderMermaid(target, source, mermaidModuleUrl) {
   const mermaidModule = await import(mermaidModuleUrl);
   const mermaid = mermaidModule.default;

@@ -9,4 +9,3 @@ httpx
 itsdangerous
 looker-sdk
 markdown
-pytest

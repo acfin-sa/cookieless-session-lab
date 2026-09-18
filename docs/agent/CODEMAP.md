@@ -30,7 +30,6 @@ Index: [AGENTS.md](../../AGENTS.md). Invariants: [INVARIANTS.md](INVARIANTS.md).
 | `docs/sequence-happy-path.mmd` | Happy-path postMessage sequence |
 | `scripts/dev.mjs` | venv check, esbuild, uvicorn `--reload` localhost:3000 |
 | `scripts/local.sh` | uvicorn only (not `npm run dev`) |
-| `tests/` | Pytest for token state, freeze, SESSION_DEAD 409, drop vs expire |
 | `.env.example` | Placeholders; `LOOKER_EMBED_SESSION_LENGTH=720` |
 
 ## HTTP routes

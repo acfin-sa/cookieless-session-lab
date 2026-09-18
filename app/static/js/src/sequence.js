@@ -15,7 +15,8 @@ if (!mermaidModuleUrlNode) {
 
 try {
   const mermaidSource = JSON.parse(sourceNode.textContent);
-  renderMermaid(target, mermaidSource).catch((error) => {
+  const mermaidModuleUrl = JSON.parse(mermaidModuleUrlNode.textContent);
+  renderMermaid(target, mermaidSource, mermaidModuleUrl).catch((error) => {
     target.textContent = error.message;
   });
 } catch (error) {

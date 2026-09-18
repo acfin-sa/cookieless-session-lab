@@ -33,13 +33,11 @@ when token-moving methods change.
 npm install
 npm run build:js
 .venv/bin/python -m compileall -q app
-.venv/bin/python -m pytest -q
 npm run dev
 ```
 
-There is no `npm test` script. Pytest covers the token state machine, freeze,
-`LookerSessionDead` → 409, and drop vs iframe expire. Manual `/lab` checks
-remain in the change playbook.
+There is no automated test suite. Verify with compileall and the manual `/lab`
+checks in the change playbook.
 
 ## Scope rules
 

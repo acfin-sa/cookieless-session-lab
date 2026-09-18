@@ -40,8 +40,9 @@ cp .env.example .env
 npm run dev
 ```
 
-`npm install` also creates `.venv` and installs Python requirements when needed,
-so the first two commands are optional if you prefer the automated setup. Fill
+`npm run setup` or `npm run dev` creates `.venv` and installs Python requirements
+when needed, so the first two commands are optional if you prefer the automated
+setup. Fill
 `.env` before logging in; never commit it.
 
 Required values:
@@ -76,7 +77,7 @@ Secret merely to run this lab; doing so invalidates live sessions.
 | `http://localhost:3000/lab` | Interactive session observatory |
 | `http://localhost:3000/architecture` | Rendered architecture guide |
 | `http://localhost:3000/sequence` | Happy-path raw `postMessage` sequence |
-| `http://localhost:3000/health` | Local health and origin check |
+| `http://localhost:3000/health` | Local smoke ping (`APP_BASE_URL`, cookie Secure flag) |
 
 The sequence is intentionally a happy path for the raw `postMessage` protocol.
 It is not the complete Embed SDK flow or a failure matrix.

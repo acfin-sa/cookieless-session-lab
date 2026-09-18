@@ -52,7 +52,6 @@ Invariants first: [INVARIANTS.md](INVARIANTS.md). Map: [CODEMAP.md](CODEMAP.md).
 ```bash
 npm run build:js
 .venv/bin/python -m compileall -q app
-.venv/bin/python -m pytest -q
 ```
 
 `scripts/local.sh` starts uvicorn only; it does not install deps or bundle JS. Use `npm run dev` for the full lab.

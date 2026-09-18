@@ -347,14 +347,12 @@ function findGanttToken(tokenId) {
   return null;
 }
 
-const TOKENS_WITHOUT_EXPIRY = new Set(["auth0_refresh", "host_session_reference"]);
-
 function tokenHasNoExpiry(token) {
-  return TOKENS_WITHOUT_EXPIRY.has(token.id) || (!token.expires_at && !token.planned_expires_at);
+  return !token.expires_at && !token.planned_expires_at;
 }
 
 function ganttRemainingSeconds(token) {
-  if (TOKENS_WITHOUT_EXPIRY.has(token.id)) {
+  if (tokenHasNoExpiry(token)) {
     return null;
   }
   const fromExpires = remainingSeconds(token);
@@ -546,8 +544,6 @@ function renderEvents(root) {
     row.dataset.eventId = event.id;
     row.dataset.tokens = [...(event.tokens_in || []), ...(event.tokens_out || [])].join(",");
     const when = event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : "";
-    const tokensIn = escapeHtml((event.tokens_in || []).join(", ") || "—");
-    const tokensOut = escapeHtml((event.tokens_out || []).join(", ") || "—");
     row.innerHTML = `
       <div><span class="when">${escapeHtml(when)}</span> · <span class="actor">${escapeHtml(event.actor)}</span></div>
       <div><strong>${escapeHtml(event.method)}</strong></div>
