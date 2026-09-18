@@ -91,8 +91,8 @@ async def refresh_host_access_token(request: Request):
             method="POST /api/host/refresh",
             actor="Host API",
             summary="no Auth0 refresh token (enable offline_access). Minting host_access_token from HostSession anyway.",
-            tokens_in=["host_session_id cookie"],
-            tokens_out=["host_access_token"],
+            tokens_in=["host_session_id cookie"] + (["auth0_refresh"] if session.auth0_refresh_token else []),
+            tokens_out=[],
             ok=True,
             status_code=200,
         )

@@ -31,25 +31,41 @@ async def refresh_auth0_tokens(session: HostSession) -> dict[str, Any]:
     }
     if AUTH0_AUDIENCE:
         payload["audience"] = AUTH0_AUDIENCE
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.post(
-            f"https://{AUTH0_DOMAIN}/oauth/token",
-            data=payload,
-        )
-    if response.status_code >= 400:
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.post(
+                f"https://{AUTH0_DOMAIN}/oauth/token",
+                data=payload,
+            )
+            response.raise_for_status()
+            token_set = response.json()
+    except httpx.HTTPStatusError as error:
+        body = error.response.text[:300] if error.response is not None else str(error)
         log_event(
             session,
             method="Auth0 /oauth/token (refresh)",
             actor="Auth0",
-            summary=f"refresh failed HTTP {response.status_code}",
+            summary=f"refresh failed HTTP {error.response.status_code}",
             tokens_in=["auth0_refresh"],
             tokens_out=[],
             ok=False,
-            status_code=response.status_code,
-            error=response.text[:300],
+            status_code=error.response.status_code,
+            error=body,
         )
-        raise Auth0RefreshError(f"Auth0 refresh failed ({response.status_code})")
-    token_set = response.json()
+        raise Auth0RefreshError(f"Auth0 refresh failed ({error.response.status_code})") from error
+    except (httpx.HTTPError, ValueError) as error:
+        log_event(
+            session,
+            method="Auth0 /oauth/token (refresh)",
+            actor="Auth0",
+            summary="refresh failed (transport or invalid JSON)",
+            tokens_in=["auth0_refresh"],
+            tokens_out=[],
+            ok=False,
+            status_code=None,
+            error=str(error)[:300],
+        )
+        raise Auth0RefreshError("Auth0 refresh failed") from error
     apply_auth0_token_set(session, token_set)
     log_event(
         session,
@@ -61,7 +77,6 @@ async def refresh_auth0_tokens(session: HostSession) -> dict[str, Any]:
         ok=True,
         status_code=200,
     )
-    return token_set
 
 
 async def revoke_auth0_refresh(session: HostSession) -> None:
@@ -73,23 +88,40 @@ async def revoke_auth0_refresh(session: HostSession) -> None:
     # WHY: losing the outer IdP layer must kill the ability to mint new host_access_tokens.
     if not session.auth0_refresh_token:
         return
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.post(
-            f"https://{AUTH0_DOMAIN}/oauth/revoke",
-            data={
-                "client_id": AUTH0_CLIENT_ID,
-                "client_secret": AUTH0_CLIENT_SECRET,
-                "token": session.auth0_refresh_token,
-            },
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.post(
+                f"https://{AUTH0_DOMAIN}/oauth/revoke",
+                data={
+                    "client_id": AUTH0_CLIENT_ID,
+                    "client_secret": AUTH0_CLIENT_SECRET,
+                    "token": session.auth0_refresh_token,
+                },
+            )
+        revoked = response.status_code < 400
+        log_event(
+            session,
+            method="Auth0 /oauth/revoke",
+            actor="Auth0",
+            summary="refresh token revoke attempted" if revoked else "refresh token revoke failed",
+            tokens_in=["auth0_refresh"],
+            tokens_out=[],
+            ok=revoked,
+            status_code=response.status_code,
+            error=None if revoked else response.text[:300],
         )
-    log_event(
-        session,
-        method="Auth0 /oauth/revoke",
-        actor="Auth0",
-        summary="refresh token revoke attempted",
-        tokens_in=["auth0_refresh"],
-        tokens_out=[],
-        ok=response.status_code < 400,
-        status_code=response.status_code,
-        error=None if response.status_code < 400 else response.text[:300],
-    )
+        if not revoked:
+            raise Auth0RefreshError(f"Auth0 revoke failed ({response.status_code})")
+    except httpx.HTTPError as error:
+        log_event(
+            session,
+            method="Auth0 /oauth/revoke",
+            actor="Auth0",
+            summary="refresh token revoke failed (transport)",
+            tokens_in=["auth0_refresh"],
+            tokens_out=[],
+            ok=False,
+            status_code=None,
+            error=str(error)[:300],
+        )
+        raise Auth0RefreshError("Auth0 revoke failed") from error

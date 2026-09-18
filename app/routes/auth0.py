@@ -75,11 +75,11 @@ async def login(request: Request):
 async def callback(request: Request):
     oauth_error = request.query_params.get("error")
     if oauth_error:
-        return await perform_logout(request)
+        return RedirectResponse(url=public_url("/lab"), status_code=302)
     try:
         token_set = await oauth.auth0.authorize_access_token(request)
     except OAuthError:
-        return await perform_logout(request)
+        return RedirectResponse(url=public_url("/lab"), status_code=302)
 
     # TOKEN: auth0_refresh, auth0_access, host_session_reference
     # CREATED BY: Auth0 /oauth/token (code exchange)

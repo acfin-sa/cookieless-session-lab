@@ -127,7 +127,11 @@ async function handleLookerIframeMessage(event) {
     const tokens = await fetchWithHostAccessToken("/api/looker/generate-embed-tokens", {
       method: "PUT",
       body: "{}",
+      signal: embedAbortController?.signal,
     });
+    if (mountGeneration !== currentMountGeneration || !rawIframe) {
+      return;
+    }
     browserHeldEmbedTokens = { ...browserHeldEmbedTokens, ...tokens };
     postSessionTokensToIframe(iframeWindow, browserHeldEmbedTokens);
     await reportRawEvent({
@@ -166,6 +170,7 @@ function createIframe(container, url) {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("allowfullscreen", "true");
   iframe.setAttribute("title", "Looker cookieless embed");
+  iframe.setAttribute("referrerpolicy", "no-referrer");
   rawIframe = iframe;
   iframe.src = url;
   container.appendChild(iframe);
@@ -210,7 +215,19 @@ export async function startPostMessageTab(config) {
     return;
   }
   bindListener();
-  await acquireAndMount(document.getElementById("postmessage-root"));
+  const root = document.getElementById("postmessage-root");
+  try {
+    await acquireAndMount(root);
+  } catch (error) {
+    root.textContent = `Failed to start Looker embed: ${error.message}`;
+    await reportRawEvent({
+      method: "POST /api/looker/acquire-embed-session",
+      actor: "Browser",
+      summary: `acquire failed; iframe not mounted. ${error.message}`,
+      ok: false,
+      error: error.message,
+    });
+  }
 }
 
 export function stopPostMessageTab() {

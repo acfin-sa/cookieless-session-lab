@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from services.host_session_auth import require_bearer_session
 from services.events import log_event
 from services import looker_client
@@ -10,6 +10,15 @@ lab_router = APIRouter(prefix="/api/lab", tags=["lab"])
 
 IFRAME_LOGIN_EVENT_METHOD = "iframe navigation to embed login URL"
 IFRAME_SESSION_EVENT_METHODS = frozenset({"session:status", "session:expired"})
+
+
+def _parse_status_code(value) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="status_code must be an integer")
 
 
 @lab_router.get("/snapshot")
@@ -51,7 +60,7 @@ async def record_client_event(request: Request):
         tokens_in=tokens_in,
         tokens_out=tokens_out,
         ok=ok,
-        status_code=int(body.get("status_code") or 200),
+        status_code=_parse_status_code(body.get("status_code", 200)),
         error=body.get("error"),
     )
     return event.to_public_dict()

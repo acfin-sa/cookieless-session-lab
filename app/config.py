@@ -23,14 +23,19 @@ def parse_bool_env(name: str, default: bool = False) -> bool:
 
 
 def parse_csv_env(name: str, default: str = "") -> list[str]:
-    raw = os.getenv(name, default)
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        raw = default
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 def parse_csv_int_env(name: str, default: str = "") -> list[int]:
     values: list[int] = []
     for item in parse_csv_env(name, default):
-        values.append(int(item))
+        try:
+            values.append(int(item))
+        except ValueError as exc:
+            raise ValueError(f"{name} contains a non-integer value: {item!r}") from exc
     return values
 
 

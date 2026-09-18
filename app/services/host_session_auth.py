@@ -62,7 +62,7 @@ def require_bearer_session(request: Request) -> HostSession:
     try:
         claims = verify_host_access_token(token)
     except InvalidTokenError as error:
-        raise HTTPException(status_code=401, detail=f"Invalid host_access_token: {error}") from error
+        raise HTTPException(status_code=401, detail="Invalid host_access_token") from error
     if claims.get("typ") != "host_access":
         raise HTTPException(status_code=401, detail="Wrong token type")
     session = session_store.get(str(claims.get("hsid") or ""))
