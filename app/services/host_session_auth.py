@@ -5,7 +5,7 @@ from fastapi.responses import Response
 from jwt import InvalidTokenError
 
 from config import HOST_SESSION_COOKIE, cookie_secure
-from services.host_tokens import verify_host_access_token
+from services.host_tokens import HOST_ACCESS_TOKEN_TYPE, HOST_SESSION_ID_CLAIM, verify_host_access_token
 from services.session_store import HostSession, session_store
 
 HOST_SESSION_COOKIE_MAX_AGE = 12 * 60 * 60
@@ -63,9 +63,9 @@ def require_bearer_session(request: Request) -> HostSession:
         claims = verify_host_access_token(token)
     except InvalidTokenError as error:
         raise HTTPException(status_code=401, detail=f"Invalid host_access_token: {error}") from error
-    if claims.get("typ") != "host_access":
+    if claims.get("typ") != HOST_ACCESS_TOKEN_TYPE:
         raise HTTPException(status_code=401, detail="Wrong token type")
-    session = session_store.get(str(claims.get("hsid") or ""))
+    session = session_store.get(str(claims.get(HOST_SESSION_ID_CLAIM) or ""))
     if session is None or session.host_session_revoked:
         raise HTTPException(status_code=401, detail="Host session is gone. Log in again.")
     if session.host_access_token_jti != claims.get("jti"):

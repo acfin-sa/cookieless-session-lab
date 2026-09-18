@@ -1,7 +1,8 @@
 import os
 from uuid import uuid4
 
-os.environ.setdefault("APP_KEY_SECRET", "pytest-host-jwt-secret-not-for-production")
+if not os.environ.get("APP_KEY_SECRET"):
+    os.environ["APP_KEY_SECRET"] = "pytest-host-jwt-secret-not-for-production"
 
 import pytest
 

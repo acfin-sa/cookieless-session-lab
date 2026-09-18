@@ -30,7 +30,7 @@
       "layer": "A",
       "badge": "Host",
       "storage": "browser memory",
-      "purpose": "Host BFF JWT. Gates /api/looker/* and /api/lab/*. Not Auth0 access and not Looker api_token."
+      "purpose": "Host BFF JWT. Gates /api/looker/* and /api/lab/*. Claim host_session_id locates HostSession (legacy claim: hsid). Not Auth0 access and not Looker api_token."
     },
     {
       "id": "session_reference_token",

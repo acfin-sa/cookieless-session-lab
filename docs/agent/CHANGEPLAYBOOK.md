@@ -55,6 +55,12 @@ npm run build:js
 .venv/bin/python -m pytest -q
 ```
 
+Pytest covers the token state machine, freeze, `LookerSessionDead` → 409, drop
+vs iframe expire, host JWT claim compatibility (`host_session_id` with legacy
+`hsid`), and iframe event discriminator compatibility (`iframe_client_kind`
+with legacy `embed_client` / `sdk` / `postmessage`). There is no `npm test`
+script. Manual `/lab` checks still apply for embed behavior.
+
 `scripts/local.sh` starts uvicorn only; it does not install deps or bundle JS. Use `npm run dev` for the full lab.
 
 Manual `/lab` checks:

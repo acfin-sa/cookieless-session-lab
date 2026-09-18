@@ -10,6 +10,23 @@ from jwt import InvalidTokenError
 from config import APP_KEY_SECRET, HOST_ACCESS_TOKEN_TTL_SECONDS
 from services.session_store import HostSession, utc_now
 
+HOST_ACCESS_TOKEN_TYPE = "host_access"
+HOST_SESSION_ID_CLAIM = "host_session_id"
+LEGACY_HOST_SESSION_ID_CLAIM = "hsid"
+
+
+def host_session_id_from_claims(claims: dict[str, Any]) -> str:
+    """Read the HostSession key from a host JWT.
+
+    New tokens use ``host_session_id``. Tokens minted before the naming
+    cutover used ``hsid``. Callers must not restate that fallback.
+    """
+    return str(
+        claims.get(HOST_SESSION_ID_CLAIM)
+        or claims.get(LEGACY_HOST_SESSION_ID_CLAIM)
+        or ""
+    )
+
 
 def _timestamp_to_datetime(value: Any) -> datetime | None:
     if value is None:
@@ -43,13 +60,15 @@ def mint_host_access_token(session: HostSession, process: str = "mint host_acces
     # LIVES AT: browser memory (JSON). Also remembered on HostSession so the observatory can show TTL.
     # TTL: HOST_ACCESS_TOKEN_TTL_SECONDS. Previous jti is dead after a refresh.
     # WHY: short-lived, low-privilege handle. The cookie only identifies the record;
-    #      this JWT is what authorizes the BFF. Analogous to Looker's api_token, not to session_reference_token.
+    #      this JWT is what authorizes the BFF. Claim host_session_id is the same
+    #      opaque key as the cookie. Analogous to Looker's api_token, not to
+    #      session_reference_token.
     now = utc_now()
     token_id = uuid4().hex
     payload = {
-        "typ": "host_access",
+        "typ": HOST_ACCESS_TOKEN_TYPE,
         "sub": session.external_user_id(),
-        "hsid": session.host_session_id,
+        HOST_SESSION_ID_CLAIM: session.host_session_id,
         "jti": token_id,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(seconds=HOST_ACCESS_TOKEN_TTL_SECONDS)).timestamp()),
@@ -70,15 +89,21 @@ def verify_host_access_token(token: str) -> dict[str, Any]:
     # LIVES AT: verified in memory on the host; never written to localStorage
     # TTL: HOST_ACCESS_TOKEN_TTL_SECONDS (exp claim)
     # WHY: cryptographic proof the browser recently talked to Layer A. We still
-    #      load HostSession from hsid and check jti so a refreshed token kills the old one.
+    #      load HostSession from claim host_session_id (legacy: hsid) and check
+    #      jti so a refreshed token kills the old one.
     if not APP_KEY_SECRET:
         raise InvalidTokenError("APP_KEY_SECRET is not configured")
-    return jwt.decode(
+    claims = jwt.decode(
         token,
         APP_KEY_SECRET,
         algorithms=["HS256"],
-        options={"require": ["exp", "iat", "jti", "hsid", "typ"]},
+        options={"require": ["exp", "iat", "jti", "typ"]},
     )
+    host_session_id = host_session_id_from_claims(claims)
+    if not host_session_id:
+        raise InvalidTokenError("host_access_token is missing host_session_id")
+    claims[HOST_SESSION_ID_CLAIM] = host_session_id
+    return claims
 
 
 def apply_auth0_token_set(session: HostSession, token_set: dict[str, Any]) -> None:

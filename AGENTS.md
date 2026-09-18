@@ -38,8 +38,10 @@ npm run dev
 ```
 
 There is no `npm test` script. Pytest covers the token state machine, freeze,
-`LookerSessionDead` → 409, and drop vs iframe expire. Manual `/lab` checks
-remain in the change playbook.
+`LookerSessionDead` → 409, drop vs iframe expire, the host JWT claim cutover
+(`host_session_id` / legacy `hsid`), and the iframe discriminator cutover
+(`iframe_client_kind` / legacy `embed_client`). Manual `/lab` checks remain in
+the change playbook.
 
 ## Scope rules
 

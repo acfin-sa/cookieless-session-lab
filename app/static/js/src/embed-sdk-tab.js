@@ -1,5 +1,6 @@
 import { getEmbedSDK } from "@looker/embed-sdk";
 import { fetchWithHostAccessToken, reportEvent } from "./host-client.js";
+import { IFRAME_CLIENT_KIND_EMBED_SDK, withIframeClientKind } from "./iframe-client-kind.js";
 
 let embedSdk = null;
 let pageConfig = null;
@@ -39,8 +40,12 @@ async function generateTokens(_tokensFromIframe) {
   return tokens;
 }
 
+function reportEmbedSdkEvent(event) {
+  return reportEvent(withIframeClientKind(event, IFRAME_CLIENT_KIND_EMBED_SDK));
+}
+
 function reportEmbedSessionExpired(method, summary) {
-  return reportEvent({
+  return reportEmbedSdkEvent({
     method,
     actor: "iframe postMessage",
     summary,
@@ -48,7 +53,6 @@ function reportEmbedSessionExpired(method, summary) {
     tokens_out: [],
     ok: false,
     expired: true,
-    embed_client: "sdk",
   });
 }
 
@@ -78,14 +82,13 @@ function mountDashboard(containerSelector) {
         );
         return;
       }
-      reportEvent({
+      reportEmbedSdkEvent({
         method: "session:status",
         actor: "iframe postMessage",
         summary: JSON.stringify({ expired: false, status: event?.status }),
         tokens_in: ["api_token", "navigation_token"],
         tokens_out: [],
         ok: true,
-        embed_client: "sdk",
       });
     })
     .on("session:expired", () => {
@@ -97,23 +100,21 @@ function mountDashboard(containerSelector) {
     .build()
     .connect()
     .then(() => {
-      reportEvent({
+      reportEmbedSdkEvent({
         method: "iframe navigation to embed login URL",
         actor: "Browser",
         summary: "Embed SDK connected; authentication_token consumed inside /login/embed",
         tokens_in: ["authentication_token", "navigation_token"],
         tokens_out: [],
-        embed_client: "sdk",
       });
     })
     .catch((error) => {
-      reportEvent({
+      reportEmbedSdkEvent({
         method: "Embed SDK connect",
         actor: "Browser",
         summary: String(error),
         ok: false,
         error: String(error),
-        embed_client: "sdk",
       });
     });
 }

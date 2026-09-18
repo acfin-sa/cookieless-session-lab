@@ -18,6 +18,42 @@ def utc_isoformat(value: datetime | None) -> str | None:
     return value.astimezone(timezone.utc).isoformat()
 
 
+IFRAME_CLIENT_KIND_FIELD = "iframe_client_kind"
+LEGACY_IFRAME_CLIENT_KIND_FIELD = "embed_client"
+IFRAME_CLIENT_KIND_EMBED_SDK = "embed_sdk"
+IFRAME_CLIENT_KIND_RAW_POSTMESSAGE = "raw_postmessage"
+
+_IFRAME_CLIENT_KIND_ALIASES = {
+    "sdk": IFRAME_CLIENT_KIND_EMBED_SDK,
+    IFRAME_CLIENT_KIND_EMBED_SDK: IFRAME_CLIENT_KIND_EMBED_SDK,
+    "postmessage": IFRAME_CLIENT_KIND_RAW_POSTMESSAGE,
+    IFRAME_CLIENT_KIND_RAW_POSTMESSAGE: IFRAME_CLIENT_KIND_RAW_POSTMESSAGE,
+}
+
+
+def canonical_iframe_client_kind(raw: str | None) -> str:
+    """Map a client event discriminator to the current iframe kind.
+
+    Writers emit ``embed_sdk`` / ``raw_postmessage``. Readers still accept
+    the pre-cutover values ``sdk`` / ``postmessage``.
+    """
+    return _IFRAME_CLIENT_KIND_ALIASES.get(str(raw or "").strip(), "")
+
+
+def iframe_client_kind_from_event_body(body: dict[str, Any]) -> str:
+    """Read the iframe discriminator from a client event body.
+
+    Prefer ``iframe_client_kind``. Fall back to the pre-cutover ``embed_client``
+    key. Callers must not restate that fallback.
+    """
+    raw = body.get(IFRAME_CLIENT_KIND_FIELD)
+    if raw in (None, ""):
+        raw = body.get(LEGACY_IFRAME_CLIENT_KIND_FIELD)
+    if raw is None:
+        return ""
+    return canonical_iframe_client_kind(raw if isinstance(raw, str) else str(raw))
+
+
 @dataclass
 class LabEvent:
     method: str
@@ -133,46 +169,49 @@ class HostSession:
     def any_iframe_session_expired(self) -> bool:
         return self.looker_sdk_iframe_expired or self.looker_postmessage_iframe_expired
 
-    def mark_iframe_started(self, embed_client: str) -> None:
+    def mark_iframe_started(self, iframe_client_kind: str) -> None:
         now = utc_now()
-        if embed_client == "sdk":
+        kind = canonical_iframe_client_kind(iframe_client_kind)
+        if kind == IFRAME_CLIENT_KIND_EMBED_SDK:
             self.looker_sdk_iframe_started = True
             if self.looker_sdk_iframe_started_at is None:
                 self.looker_sdk_iframe_started_at = now
             self.looker_sdk_iframe_expired = False
             self.looker_sdk_iframe_expired_at = None
             return
-        if embed_client == "postmessage":
+        if kind == IFRAME_CLIENT_KIND_RAW_POSTMESSAGE:
             self.looker_postmessage_iframe_started = True
             if self.looker_postmessage_iframe_started_at is None:
                 self.looker_postmessage_iframe_started_at = now
             self.looker_postmessage_iframe_expired = False
             self.looker_postmessage_iframe_expired_at = None
 
-    def mark_iframe_expired(self, embed_client: str) -> bool:
+    def mark_iframe_expired(self, iframe_client_kind: str) -> bool:
         """Apply session:expired only to an iframe that was actually started.
 
         Returns True if the flag changed. Unborn iframes stay unborn.
         """
         now = utc_now()
-        if embed_client == "sdk" and self.looker_sdk_iframe_started:
+        kind = canonical_iframe_client_kind(iframe_client_kind)
+        if kind == IFRAME_CLIENT_KIND_EMBED_SDK and self.looker_sdk_iframe_started:
             self.looker_sdk_iframe_expired = True
             if self.looker_sdk_iframe_expired_at is None:
                 self.looker_sdk_iframe_expired_at = now
             return True
-        if embed_client == "postmessage" and self.looker_postmessage_iframe_started:
+        if kind == IFRAME_CLIENT_KIND_RAW_POSTMESSAGE and self.looker_postmessage_iframe_started:
             self.looker_postmessage_iframe_expired = True
             if self.looker_postmessage_iframe_expired_at is None:
                 self.looker_postmessage_iframe_expired_at = now
             return True
         return False
 
-    def mark_iframe_alive(self, embed_client: str) -> None:
-        if embed_client == "sdk" and self.looker_sdk_iframe_started:
+    def mark_iframe_alive(self, iframe_client_kind: str) -> None:
+        kind = canonical_iframe_client_kind(iframe_client_kind)
+        if kind == IFRAME_CLIENT_KIND_EMBED_SDK and self.looker_sdk_iframe_started:
             self.looker_sdk_iframe_expired = False
             self.looker_sdk_iframe_expired_at = None
             return
-        if embed_client == "postmessage" and self.looker_postmessage_iframe_started:
+        if kind == IFRAME_CLIENT_KIND_RAW_POSTMESSAGE and self.looker_postmessage_iframe_started:
             self.looker_postmessage_iframe_expired = False
             self.looker_postmessage_iframe_expired_at = None
 

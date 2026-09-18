@@ -5,6 +5,7 @@ from services.host_session_auth import require_bearer_session
 from services.events import log_event
 from services import looker_client
 from services.observatory import build_observatory_snapshot
+from services.session_store import iframe_client_kind_from_event_body
 
 lab_router = APIRouter(prefix="/api/lab", tags=["lab"])
 
@@ -29,18 +30,18 @@ async def record_client_event(request: Request):
     tokens_out = list(body.get("tokens_out") or [])
     ok = bool(body.get("ok", True))
     expired = bool(body.get("expired", False))
-    embed_client = str(body.get("embed_client") or "")
+    iframe_client_kind = iframe_client_kind_from_event_body(body)
     if method == IFRAME_LOGIN_EVENT_METHOD:
         session.mark_authentication_consumed()
-        session.mark_iframe_started(embed_client)
+        session.mark_iframe_started(iframe_client_kind)
     if method in IFRAME_SESSION_EVENT_METHODS and (not ok or expired):
         # Session-level “I can’t keep working.” Not “nav died” or “api died.”
         # Do not smash each JWT’s exp — cards follow their own clocks.
         # Ignore expiry for an iframe that was never started (raw postMessage
         # stays unborn until that tab is opened).
-        session.mark_iframe_expired(embed_client)
+        session.mark_iframe_expired(iframe_client_kind)
     elif method == "session:status" and ok and not expired:
-        session.mark_iframe_alive(embed_client)
+        session.mark_iframe_alive(iframe_client_kind)
     event = log_event(
         session,
         method=method,

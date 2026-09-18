@@ -67,6 +67,8 @@ storage.
 The host cookie is only an opaque lookup key. The bearer token is the
 short-lived authorization for protected BFF routes. The server checks its
 signature, expiry, type, HostSession, revocation state, and current `jti`.
+The host JWT claim `host_session_id` is that same opaque key as the cookie.
+Verification still accepts the older claim name `hsid` on in-flight tokens.
 
 ## Token lifetimes
 

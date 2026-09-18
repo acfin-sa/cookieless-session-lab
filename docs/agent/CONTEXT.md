@@ -10,7 +10,7 @@ Auth0 proves the human
         └── Looker cookieless session (Layer B) authorizes the iframe
 ```
 
-- Layer A: Auth0 Authorization Code + PKCE. Tokens stay on `HostSession`. Browser presents `host_session_id` (HttpOnly cookie) and `host_access_token` (memory JWT).
+- Layer A: Auth0 Authorization Code + PKCE. Tokens stay on `HostSession`. Browser presents `host_session_id` (HttpOnly cookie) and `host_access_token` (memory JWT). The JWT claim `host_session_id` is the same opaque key as the cookie (legacy claim: `hsid`).
 - Layer B: reachable only after Layer A bearer verification (`require_bearer_session` in `app/services/host_session_auth.py`). Host calls Looker acquire / generate / DELETE.
 
 ## Trust boundaries
@@ -105,5 +105,9 @@ Same host contract, two browsers of it:
 
 - `app/static/js/src/embed-sdk-tab.js` — `@looker/embed-sdk` `initCookieless`
 - `app/static/js/src/postmessage-tab.js` — raw `session:tokens:request` / `session:tokens`
+
+Client events (`POST /api/lab/events`) set `iframe_client_kind` to `embed_sdk`
+or `raw_postmessage` so iframe started/expired flags stay per tab. The host
+still accepts the older field `embed_client` and values `sdk` / `postmessage`.
 
 `docs/sequence-happy-path.mmd` is the raw postMessage happy path only.

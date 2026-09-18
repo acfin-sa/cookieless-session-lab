@@ -1,4 +1,5 @@
 import { fetchWithHostAccessToken, reportEvent } from "./host-client.js";
+import { IFRAME_CLIENT_KIND_RAW_POSTMESSAGE, withIframeClientKind } from "./iframe-client-kind.js";
 
 let pageConfig = null;
 let browserHeldEmbedTokens = null;
@@ -25,10 +26,7 @@ function cookielessLoginUrl(authenticationToken, navigationToken, dashboardId) {
 }
 
 function reportRawEvent(event) {
-  return reportEvent({
-    ...event,
-    embed_client: "postmessage",
-  });
+  return reportEvent(withIframeClientKind(event, IFRAME_CLIENT_KIND_RAW_POSTMESSAGE));
 }
 
 function isRawIframeMessage(event) {

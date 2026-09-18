@@ -10,7 +10,9 @@ MUST / MUST NOT for this tree. Match `app/` if this file and comments disagree; 
 - MUST NOT return Auth0 refresh, access, or ID tokens to the browser.
 - MUST keep `authentication_token` single-use on the embed login URL (`/login/embed`); mark consumed via `POST /api/lab/events` method `iframe navigation to embed login URL`.
 - MUST treat `navigation_token` and `api_token` as sibling JWTs: independent TTL/`exp`; `generate_tokens` rotates both; they are not Layer B identity.
-- MUST treat `host_session_id` as opaque lookup only.
+- MUST treat `host_session_id` as opaque lookup only (cookie and host JWT claim).
+- MUST mint `host_access_token` with claim `host_session_id`. Verification MUST
+  still accept legacy claim `hsid` until that fallback is removed.
 - MUST treat `host_access_token` as the host BFF bearer (Layer A). It gates
   `/api/looker/*` and `/api/lab/*`; it is not Looker's `api_token` and not Auth0
   access. Looker identity is `session_reference_token`.
@@ -58,6 +60,9 @@ MUST / MUST NOT for this tree. Match `app/` if this file and comments disagree; 
 ## Embed clients
 
 - MUST keep Embed SDK and raw postMessage as two clients of the same host contract.
+- MUST identify client events with `iframe_client_kind` (`embed_sdk` /
+  `raw_postmessage`). Readers MUST still accept legacy field `embed_client` and
+  values `sdk` / `postmessage` until that fallback is removed.
 - MUST NOT send `session_reference_token` on `session:tokens`.
 - MUST validate raw postMessage `event.source` and Looker origin in `postmessage-tab.js`.
 
