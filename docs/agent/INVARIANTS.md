@@ -2,6 +2,8 @@
 
 MUST / MUST NOT for this tree. Match `app/` if this file and comments disagree; then fix comments, not product behavior, without a human ask.
 
+Lifecycle and trust-boundary detail: [CONTEXT.md](CONTEXT.md). File/route map: [CODEMAP.md](CODEMAP.md).
+
 ## Token ownership
 
 - MUST keep `session_reference_token` on the server (`HostSession.looker_session_reference_token`).

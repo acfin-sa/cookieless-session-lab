@@ -1,6 +1,8 @@
 # Code map
 
-Index: [AGENTS.md](../../AGENTS.md). Invariants: [INVARIANTS.md](INVARIANTS.md).
+This file is the file / route / symbol map. Lifecycle and trust-boundary
+detail: [CONTEXT.md](CONTEXT.md). Index: [AGENTS.md](../../AGENTS.md).
+Invariants: [INVARIANTS.md](INVARIANTS.md).
 
 ## Directory map
 

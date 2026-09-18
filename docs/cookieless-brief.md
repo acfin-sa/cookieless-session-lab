@@ -2,7 +2,9 @@
 
 This is the short briefing for the
 [cookieless session lab](../README.md). See
-[ARCHITECTURE.md](../ARCHITECTURE.md) for the full design.
+[ARCHITECTURE.md](../ARCHITECTURE.md) for the design method. Exhaustive
+token, storage, renew, User-Agent, logout, and embed-client detail lives in
+[docs/agent/CONTEXT.md](agent/CONTEXT.md).
 
 ## Why does Looker need a cookieless mode?
 
@@ -27,18 +29,14 @@ Looker tokens.
 
 ## Which tokens can reach the browser?
 
-The browser receives:
+The browser receives an opaque `host_session_id` cookie, a short-lived
+`host_access_token` in memory (host BFF JWT — not Auth0 access and not Looker's
+`api_token`), a one-use `authentication_token`, and sibling `navigation_token` /
+`api_token` JWTs for the iframe.
 
-- `host_session_id` as an opaque `HttpOnly` cookie;
-- `host_access_token` in JavaScript memory (host BFF JWT that gates Looker host
-  routes; not Auth0 access and not Looker's `api_token`);
-- one-use `authentication_token` for the embed login URL;
-- short-lived `navigation_token` and `api_token` for the iframe.
-
-Auth0 refresh, access, and ID tokens remain on the server.
-`session_reference_token` also remains on the server and is never included in a
-browser JSON response or URL. `host_session_reference` is a lab-only host id
-shown in the observatory; it is not sent to Auth0 or Looker.
+Auth0 refresh, access, and ID tokens stay on the server, as does
+`session_reference_token`. `host_session_reference` is a lab-only observatory
+id; it is not sent to Auth0 or Looker.
 
 ## Why are there two short-lived Looker tokens?
 
@@ -50,27 +48,22 @@ have independent returned TTLs.
 ## Does renew mean login again?
 
 No. Login proves identity; renewal rotates short-lived credentials while the
-durable server-side session remains.
-
-`POST /api/host/refresh` uses the cookie-selected HostSession, refreshes Auth0
-tokens when a refresh token is available, and mints a new host JWT.
-
-`PUT /api/looker/generate-embed-tokens` uses the server-held Looker reference
-and the previous navigation/API tokens to obtain replacements. If Looker reports
-zero session-reference TTL, Layer B is dead and must be acquired again.
+durable server-side session remains. Host refresh keeps Layer A callable.
+Looker generate rotates iframe tokens under the stored session reference. If
+Looker reports zero session-reference TTL, Layer B is dead and must be acquired
+again — Layer A may still be valid.
 
 ## What does the iframe's `session:expired` event prove?
 
 It says the iframe cannot keep working. It does not revoke the server's session
 reference and does not rewrite the independent navigation/API expiry clocks.
-The lab tracks those states separately.
 
 ## Why does User-Agent matter?
 
 Looker binds cookieless calls to the client context. The lab forwards the
-incoming request's User-Agent on acquire, generate, and end. A normal browser
-keeps it stable; the mismatch control substitutes a fake value on generate so
-the failure is visible.
+**current request** User-Agent. A normal browser keeps it stable; the mismatch
+control substitutes a fake value on generate so the failure is visible. That is
+not “always the original login UA.”
 
 ## What happens with two browsers?
 

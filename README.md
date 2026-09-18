@@ -24,8 +24,15 @@ an opaque `HttpOnly` cookie, a short-lived host JWT in memory, and only the
 Looker tokens needed by the iframe.
 
 Read [ARCHITECTURE.md](ARCHITECTURE.md) for the design method and
-[the cookieless brief](docs/cookieless-brief.md) for a concise Q&A. Coding tools
-should start at [AGENTS.md](AGENTS.md).
+[the cookieless brief](docs/cookieless-brief.md) for a concise Q&A.
+
+| Question | Read |
+| --- | --- |
+| Why it works, which approach, trade-offs | this README, ARCHITECTURE, the brief |
+| Parameters, routes, tokens, procedures | [CONTEXT](docs/agent/CONTEXT.md), [CODEMAP](docs/agent/CODEMAP.md), [token-method-map.json](docs/token-method-map.json) |
+
+Coding tools should start at [AGENTS.md](AGENTS.md) — see
+[Instructing an agent](#instructing-an-agent).
 
 ## Quick start
 
@@ -97,3 +104,21 @@ It is not the complete Embed SDK flow or a failure matrix.
 The method catalog in `/lab` comes from
 [`docs/token-method-map.json`](docs/token-method-map.json). Host sessions are
 in process memory, so restarting the app intentionally clears both layers.
+
+## Instructing an agent
+
+Point coding tools at [AGENTS.md](AGENTS.md). That file is the agent door; it is
+not a second architecture essay.
+
+Have the agent read, in order:
+
+1. [`docs/agent/CONTEXT.md`](docs/agent/CONTEXT.md) — trust boundaries and token lifecycle
+2. [`docs/agent/INVARIANTS.md`](docs/agent/INVARIANTS.md) — MUST / MUST NOT
+3. [`docs/agent/CODEMAP.md`](docs/agent/CODEMAP.md) — files, routes, symbols
+4. [`docs/agent/CHANGEPLAYBOOK.md`](docs/agent/CHANGEPLAYBOOK.md) — safe edits and `/lab` checks
+
+When a change moves tokens or routes, say so explicitly and require
+[`docs/token-method-map.json`](docs/token-method-map.json) plus the invariants
+to stay in sync with the code. CONTEXT, INVARIANTS, and CODEMAP are the
+structured sources; do not ask the agent to treat this README, ARCHITECTURE, or
+the brief as a second full inventory.

@@ -7,7 +7,8 @@ two-layer session model and token ownership boundaries. This is not a production
 session store.
 
 Human onboarding: [README.md](README.md). Human design rationale:
-[ARCHITECTURE.md](ARCHITECTURE.md).
+[ARCHITECTURE.md](ARCHITECTURE.md). Humans directing an agent:
+[README.md — Instructing an agent](README.md#instructing-an-agent).
 
 ## Stack
 
