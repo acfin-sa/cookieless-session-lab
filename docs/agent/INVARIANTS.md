@@ -31,6 +31,8 @@ MUST / MUST NOT for this tree. Match `app/` if this file and comments disagree; 
 - MUST map `session_reference_token_ttl == 0` to `LookerSessionDead` → HTTP 409 `{ "code": "SESSION_DEAD" }`.
 - MUST return HTTP 200 with `frozen: true` when `freeze_token_refresh` is on (no Looker rotate).
 - MUST NOT treat freeze as session death.
+- MUST log generate freeze at the host HTTP boundary without claiming nav/api rotation.
+- MUST log Looker acquire/generate/end failures once at the HTTP boundary (not also in `looker_client`).
 
 ## session:expired vs revoke
 
@@ -42,7 +44,7 @@ MUST / MUST NOT for this tree. Match `app/` if this file and comments disagree; 
 ## User-Agent
 
 - MUST forward the **current request** UA (`request_user_agent`) on acquire, generate, and end, except:
-- MUST send `LOOKER_MISMATCH_USER_AGENT` on generate only when `force_user_agent_mismatch` is true.
+- MUST send `LOOKER_MISMATCH_USER_AGENT` on generate only when `force_user_agent_mismatch` is true **and** `freeze_token_refresh` is false. Freeze wins: no Looker call, no mismatch UA.
 - MUST NOT claim generate always uses the login-time `HostSession.user_agent`.
 - MUST NOT confuse observatory `looker_bound_user_agent` (login snapshot) with the UA sent to Looker.
 

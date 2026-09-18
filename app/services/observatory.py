@@ -208,7 +208,7 @@ def iframe_client_snapshot(session: HostSession, _now: datetime, spec: dict[str,
         if session.freeze_token_refresh or session.force_user_agent_mismatch:
             reason = (
                 "iframe has not reported session:expired. "
-                "generate_tokens cannot rotate."
+                "generate_tokens cannot rotate. "
                 "This row ends when the current JWTs expire."
             )
         else:

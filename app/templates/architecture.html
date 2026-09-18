@@ -11,7 +11,7 @@
         <div>
             <p class="eyebrow">Design method</p>
             <h1>Architecture — nested cookieless sessions</h1>
-            <p class="hint">Rendered from <code>ARCHITECTURE.md</code> at request time.</p>
+            <p class="hint">Rendered from <code>ARCHITECTURE.md</code> at request time. Defaults in that file; this process is running with <code>HOST_ACCESS_TOKEN_TTL_SECONDS={{ host_access_token_ttl_seconds }}</code> and <code>LOOKER_EMBED_SESSION_LENGTH={{ looker_embed_session_length }}</code>.</p>
             {% if logged_in and user_name %}
             <p class="who">{{ user_name }}{% if user_email %}{% if user_email != user_name %} · {{ user_email }}{% endif %}{% endif %}</p>
             {% endif %}

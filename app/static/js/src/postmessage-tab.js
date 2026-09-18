@@ -73,15 +73,26 @@ async function handleLookerIframeMessage(event) {
   if (!data) {
     return;
   }
-  if (data.type === "session:status" && data.expired) {
+  if (data.type === "session:expired" || (data.type === "session:status" && data.expired)) {
     await reportRawEvent({
-      method: "session:status",
+      method: data.type === "session:expired" ? "session:expired" : "session:status",
       actor: "iframe postMessage",
-      summary: "iframe session:status expired=true — embed cannot keep working; session_reference not revoked. Nav/api JWT clocks are unchanged.",
+      summary: "iframe session expired — embed cannot keep working; session_reference not revoked. Nav/api JWT clocks are unchanged.",
       tokens_in: ["iframe_session_postmessage"],
       tokens_out: [],
       ok: false,
       expired: true,
+    });
+    return;
+  }
+  if (data.type === "session:status") {
+    await reportRawEvent({
+      method: "session:status",
+      actor: "iframe postMessage",
+      summary: JSON.stringify({ expired: false, status: data.status }),
+      tokens_in: ["api_token", "navigation_token"],
+      tokens_out: [],
+      ok: true,
     });
     return;
   }
@@ -163,6 +174,13 @@ async function acquireAndMount(container) {
     body: "{}",
   });
   browserHeldEmbedTokens = tokens;
+  await reportRawEvent({
+    method: "POST /api/looker/acquire-embed-session",
+    actor: "Browser",
+    summary: "raw postMessage tab received browser-safe tokens",
+    tokens_in: ["host_access_token"],
+    tokens_out: ["authentication_token", "navigation_token", "api_token"],
+  });
   const url = cookielessLoginUrl(
     tokens.authentication_token,
     tokens.navigation_token,

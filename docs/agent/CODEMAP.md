@@ -10,7 +10,7 @@ Index: [AGENTS.md](../../AGENTS.md). Invariants: [INVARIANTS.md](INVARIANTS.md).
 | `app/config.py` | Env + hardcoded `HOST_ACCESS_TOKEN_TTL_SECONDS`, `LOOKER_MISMATCH_USER_AGENT`, `APP_KEY_SECRET` |
 | `app/routes/auth0.py` | `GET /login`, `/callback`, `/logout` |
 | `app/routes/host.py` | `POST /api/host/bootstrap`, `/refresh` |
-| `app/routes/looker.py` | Layer B HTTP: acquire / generate / end; strips `session_reference_token` |
+| `app/routes/looker.py` | Layer B HTTP: acquire / generate / end; `browser_safe_looker_payload` strip; generate freeze/failure logs |
 | `app/routes/lab.py` | Observatory snapshot, events, controls, drop-reference |
 | `app/routes/views.py` | `/`, `/lab`, `/architecture`, `/sequence` |
 | `app/services/session_store.py` | `HostSession`, `LabEvent`, `SessionStore`, `session_store` |
@@ -29,6 +29,7 @@ Index: [AGENTS.md](../../AGENTS.md). Invariants: [INVARIANTS.md](INVARIANTS.md).
 | `docs/sequence-happy-path.mmd` | Happy-path postMessage sequence |
 | `scripts/dev.mjs` | venv check, esbuild, uvicorn `--reload` localhost:3000 |
 | `scripts/local.sh` | uvicorn only (not `npm run dev`) |
+| `tests/` | Pytest for token state, freeze, SESSION_DEAD 409, drop vs expire |
 | `.env.example` | Placeholders; `LOOKER_EMBED_SESSION_LENGTH=720` |
 
 ## HTTP routes

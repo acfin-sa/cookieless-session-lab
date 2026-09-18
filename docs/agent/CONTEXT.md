@@ -72,7 +72,7 @@ remains `session_reference_token`. Observatory `badge` comes from
 
 - Acquire / generate / end pass `request_user_agent(request)` (current request `User-Agent` header) into `looker-sdk` `transport_options`.
 - Observatory field `looker_bound_user_agent` is **login-time** `HostSession.user_agent` (`build_observatory_snapshot`). Routes do not compare later requests to that stored value.
-- `force_user_agent_mismatch` replaces UA with `LOOKER_MISMATCH_USER_AGENT` (`CookielessLab/ua-mismatch`) on **generate only**.
+- `force_user_agent_mismatch` replaces UA with `LOOKER_MISMATCH_USER_AGENT` (`CookielessLab/ua-mismatch`) on **generate only**, and only when freeze is off. Freeze short-circuits generate (no Looker call), so mismatch is not sent and not logged as if it fired.
 
 MUST NOT document “always the original login UA.”
 

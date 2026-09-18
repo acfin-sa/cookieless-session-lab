@@ -15,6 +15,52 @@ from services.looker_client import LookerNotConfigured, LookerSessionDead, looke
 looker_router = APIRouter(prefix="/api/looker", tags=["looker"])
 
 
+def browser_safe_looker_payload(payload: dict) -> dict:
+    """Last-line strip: session_reference_token must never leave the host JSON."""
+    return {key: value for key, value in payload.items() if key != "session_reference_token"}
+
+
+def log_generate_http_result(session, payload: dict) -> None:
+    """Host-boundary generate log. Looker rotation is logged in looker_client.
+
+    Frozen generate never calls Looker, so this is the only observatory row.
+    It must not claim that nav/api tokens rotated.
+    """
+    if not payload.get("frozen"):
+        return
+    summary = (
+        "freeze_token_refresh is on — returned existing nav/api tokens; Looker was not called"
+    )
+    if session.force_user_agent_mismatch:
+        summary += " (User-Agent mismatch was not sent; freeze wins)"
+    log_event(
+        session,
+        method="PUT /api/looker/generate-embed-tokens",
+        actor="Host API",
+        summary=summary,
+        tokens_in=["host_access_token", "session_reference_token"],
+        tokens_out=[],
+        ok=True,
+        status_code=200,
+    )
+
+
+def log_unexpected_looker_failure(session, method: str, error: Exception) -> JSONResponse:
+    detail = str(error)
+    log_event(
+        session,
+        method=method,
+        actor="Host API",
+        summary=detail,
+        tokens_in=["host_access_token"],
+        tokens_out=[],
+        ok=False,
+        status_code=502,
+        error=detail,
+    )
+    return JSONResponse({"detail": detail}, status_code=502)
+
+
 def is_looker_unreachable(error: Exception) -> bool:
     text = str(getattr(error, "message", None) or error)
     return any(
@@ -102,10 +148,10 @@ async def acquire_embed_session(request: Request):
     except Exception as error:
         if is_looker_unreachable(error):
             return looker_http_error_response(session, "Looker POST /embed/cookieless_session/acquire", error)
-        return JSONResponse({"detail": str(error)}, status_code=502)
-    if "session_reference_token" in payload:
-        payload = {key: value for key, value in payload.items() if key != "session_reference_token"}
-    return payload
+        return log_unexpected_looker_failure(
+            session, "POST /api/looker/acquire-embed-session", error
+        )
+    return browser_safe_looker_payload(payload)
 
 
 @looker_router.put("/generate-embed-tokens")
@@ -118,6 +164,8 @@ async def generate_embed_tokens(request: Request):
     # WHY: the iframe is an untrusted peer. It may ask for tokens; it may not mint them
     #      or tell us which session_reference to use. Body nav/api are ignored for identity.
     session = require_bearer_session(request)
+    # Freeze wins: generate returns stored JWTs and never calls Looker, so a
+    # mismatch UA must not be sent or logged as if it were about to fire.
     if session.freeze_token_refresh:
         user_agent = request_user_agent(request)
     elif session.force_user_agent_mismatch:
@@ -169,20 +217,11 @@ async def generate_embed_tokens(request: Request):
                 "Looker PUT /embed/cookieless_session/generate_tokens",
                 error,
             )
-        return JSONResponse({"detail": str(error)}, status_code=502)
-    if "session_reference_token" in payload:
-        payload = {key: value for key, value in payload.items() if key != "session_reference_token"}
-    if not payload.get("frozen"):
-        log_event(
-            session,
-            method="PUT /api/looker/generate-embed-tokens",
-            actor="Host API",
-            summary="returned rotated nav/api tokens; session_reference_token omitted",
-            tokens_in=["host_access_token"],
-            tokens_out=["navigation_token", "api_token"],
-            ok=True,
-            status_code=200,
+        return log_unexpected_looker_failure(
+            session, "PUT /api/looker/generate-embed-tokens", error
         )
+    payload = browser_safe_looker_payload(payload)
+    log_generate_http_result(session, payload)
     return payload
 
 

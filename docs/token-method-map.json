@@ -74,12 +74,7 @@
       "direction": "Browser → Auth0",
       "tokens_in": [],
       "tokens_out": ["authorization_code"],
-      "where_after": "Query string on GET /callback for a few seconds. Not stored.",
-      "failure_modes": [
-        "redirect_uri not in Auth0 Allowed Callback URLs",
-        "PKCE verifier missing from the oauth_pkce_state cookie",
-        "user cancels Universal Login"
-      ]
+      "where_after": "Query string on GET /callback for a few seconds. Not stored."
     },
     {
       "id": "auth0_token_code",
@@ -89,12 +84,7 @@
       "direction": "Host API → Auth0",
       "tokens_in": ["authorization_code"],
       "tokens_out": ["auth0_refresh", "auth0_access", "host_session_reference"],
-      "where_after": "All three stay on the HostSession. Browser never sees them. host_session_id cookie is set as the opaque handle.",
-      "failure_modes": [
-        "code already used",
-        "client_secret mismatch",
-        "offline_access not allowed → no refresh token"
-      ]
+      "where_after": "All three stay on the HostSession. Browser never sees them. host_session_id cookie is set as the opaque handle."
     },
     {
       "id": "auth0_token_refresh",
@@ -104,11 +94,7 @@
       "direction": "Host API → Auth0",
       "tokens_in": ["auth0_refresh"],
       "tokens_out": ["auth0_refresh", "auth0_access"],
-      "where_after": "Server HostSession. Rotating refresh tokens replace the stored value.",
-      "failure_modes": [
-        "refresh token revoked or expired",
-        "Reuse Detection if rotation is on and an old refresh is replayed"
-      ]
+      "where_after": "Server HostSession. Rotating refresh tokens replace the stored value."
     },
     {
       "id": "host_bootstrap",
@@ -118,10 +104,7 @@
       "direction": "Browser → Host API",
       "tokens_in": ["host_session_id cookie"],
       "tokens_out": ["host_access_token"],
-      "where_after": "JSON body → browser memory. This is the host BFF JWT, not Auth0 access and not Looker api_token.",
-      "failure_modes": [
-        "missing or unknown host_session_id cookie"
-      ]
+      "where_after": "JSON body → browser memory. This is the host BFF JWT, not Auth0 access and not Looker api_token."
     },
     {
       "id": "host_refresh",
@@ -131,11 +114,7 @@
       "direction": "Browser → Host API",
       "tokens_in": ["host_session_id cookie", "auth0_refresh"],
       "tokens_out": ["host_access_token"],
-      "where_after": "JSON body → browser memory. Previous host_access_token jti is dead.",
-      "failure_modes": [
-        "missing or unknown host_session_id cookie",
-        "Auth0 refresh failed → 401, re-login"
-      ]
+      "where_after": "JSON body → browser memory. Previous host_access_token jti is dead."
     },
     {
       "id": "host_acquire_looker",
@@ -145,12 +124,7 @@
       "direction": "Browser → Host API",
       "tokens_in": ["host_access_token"],
       "tokens_out": ["authentication_token", "navigation_token", "api_token"],
-      "where_after": "JSON to browser memory. session_reference_token is stripped and stored on HostSession only.",
-      "failure_modes": [
-        "expired host_access_token (401)",
-        "Looker Admin cookieless not enabled (often 404)",
-        "embed_domain not allow-listed"
-      ]
+      "where_after": "JSON to browser memory. session_reference_token is stripped and stored on HostSession only."
     },
     {
       "id": "looker_acquire",
@@ -160,12 +134,7 @@
       "direction": "Host API → Looker API",
       "tokens_in": ["session_reference_token (optional, reattach)"],
       "tokens_out": ["session_reference_token", "authentication_token", "navigation_token", "api_token"],
-      "where_after": "Looker holds the real session. Host keeps session_reference_token. Browser gets the other three.",
-      "failure_modes": [
-        "API user cannot manage embed",
-        "Embed JWT Secret reset (kills all cookieless sessions)",
-        "User-Agent / embed_domain mismatch on reattach"
-      ]
+      "where_after": "Looker holds the real session. Host keeps session_reference_token. Browser gets the other three."
     },
     {
       "id": "iframe_embed_login",
@@ -175,12 +144,7 @@
       "direction": "Browser → Looker (iframe)",
       "tokens_in": ["authentication_token", "navigation_token"],
       "tokens_out": [],
-      "where_after": "authentication_token is consumed (dead). navigation_token stays on the embed URL as embed_navigation_token.",
-      "failure_modes": [
-        "authentication_token already used",
-        "authentication_token older than ~30s",
-        "embed_domain mismatch"
-      ]
+      "where_after": "authentication_token is consumed (dead). navigation_token stays on the embed URL as embed_navigation_token."
     },
     {
       "id": "postmessage_tokens_request",
@@ -190,11 +154,7 @@
       "direction": "iframe → Browser",
       "tokens_in": [],
       "tokens_out": [],
-      "where_after": "No tokens travel. This is a request that the host must answer with session:tokens.",
-      "failure_modes": [
-        "origin check failed (wrong Looker host)",
-        "host ignores the message → iframe waits then errors"
-      ]
+      "where_after": "No tokens travel. This is a request that the host must answer with session:tokens."
     },
     {
       "id": "postmessage_tokens",
@@ -204,11 +164,7 @@
       "direction": "Browser → iframe",
       "tokens_in": ["api_token", "navigation_token"],
       "tokens_out": ["api_token", "navigation_token"],
-      "where_after": "Looker UI in the iframe. navigation_token is in-iframe page/dashboard navigation; api_token is iframe Looker API calls. First reply after login reuses acquire tokens; later replies need generate_tokens. Each JWT keeps its own exp.",
-      "failure_modes": [
-        "session_reference_token_ttl == 0 (session dead)",
-        "stale tokens if refresh was frozen"
-      ]
+      "where_after": "Looker UI in the iframe. navigation_token is in-iframe page/dashboard navigation; api_token is iframe Looker API calls. First reply after login reuses acquire tokens; later replies need generate_tokens. Each JWT keeps its own exp."
     },
     {
       "id": "host_generate",
@@ -218,12 +174,7 @@
       "direction": "Browser → Host API",
       "tokens_in": ["host_access_token"],
       "tokens_out": ["navigation_token", "api_token"],
-      "where_after": "JSON to browser, then postMessage into the iframe. Server loads session_reference_token itself — the body is not trusted as a source of session identity.",
-      "failure_modes": [
-        "freeze toggle on → tokens are not rotated",
-        "dropped session_reference on server",
-        "401 if host_access_token expired"
-      ]
+      "where_after": "JSON to browser, then postMessage into the iframe. Server loads session_reference_token itself — the body is not trusted as a source of session identity."
     },
     {
       "id": "looker_generate",
@@ -233,12 +184,7 @@
       "direction": "Host API → Looker API",
       "tokens_in": ["session_reference_token", "navigation_token", "api_token"],
       "tokens_out": ["navigation_token", "api_token", "session_reference_token"],
-      "where_after": "session_reference_token stays on the server. New nav/api tokens returned to the browser without the reference.",
-      "failure_modes": [
-        "400 User-Agent mismatch (lab button)",
-        "ttl == 0 is wrapped as HTTP 409 code SESSION_DEAD",
-        "invalid or unknown session_reference_token"
-      ]
+      "where_after": "session_reference_token stays on the server. New nav/api tokens returned to the browser without the reference."
     },
     {
       "id": "host_end_embed",
@@ -248,11 +194,7 @@
       "direction": "Browser → Host API",
       "tokens_in": ["host_access_token", "session_reference_token"],
       "tokens_out": [],
-      "where_after": "Looker session deleted. Host copy of Layer B tokens cleared. Layer A remains.",
-      "failure_modes": [
-        "already deleted (404 is treated as success for the lab)",
-        "401 host_access_token"
-      ]
+      "where_after": "Looker session deleted. Host copy of Layer B tokens cleared. Layer A remains."
     },
     {
       "id": "logout",
@@ -262,11 +204,7 @@
       "direction": "Browser → Host API → Auth0",
       "tokens_in": ["host_session_id cookie", "auth0_refresh", "session_reference_token"],
       "tokens_out": [],
-      "where_after": "HostSession deleted. Cookie cleared. Auth0 refresh revoked when possible. Browser memory discarded.",
-      "failure_modes": [
-        "Auth0 revoke endpoint unavailable — session is still deleted locally",
-        "Looker delete 404 if session already expired"
-      ]
+      "where_after": "HostSession deleted. Cookie cleared. Auth0 refresh revoked when possible. Browser memory discarded."
     }
   ]
 }

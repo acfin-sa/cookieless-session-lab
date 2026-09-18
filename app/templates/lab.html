@@ -29,8 +29,8 @@
             <input type="checkbox" id="toggle-user-agent-mismatch" />
             Force User-Agent mismatch
         </label>
-        <button type="button" title="POST /api/lab/drop-session-reference" id="btn-drop-session-reference">Drop session_reference on server</button>
-        <button type="button" title="POST /api/looker/end-embed-session" id="btn-end-looker">End Looker session</button>
+        <button type="button" title="Forget the host copy of session_reference_token. Looker still has the session until its TTL. Later generate_tokens returns 409 SESSION_DEAD. Layer A stays logged in. Nav/api clocks are unchanged until they expire." id="btn-drop-session-reference">Drop session_reference on server</button>
+        <button type="button" title="DELETE the Looker cookieless session and clear Layer B tokens on the host. Layer A (Auth0 HostSession) stays. The iframe cannot refresh until you acquire again." id="btn-end-looker">End Looker session</button>
     </section>
 
     <div class="lab-split">
@@ -69,10 +69,7 @@
                 <button type="button" class="tab active" data-tab="embed-sdk">Embed SDK</button>
                 <button type="button" class="tab" data-tab="postmessage">Raw postMessage</button>
             </div>
-            <p class="hint" id="tab-caption">
-                The Embed SDK manages the iframe and tokens in the server;
-                <br>Raw postMessage directly exchanges tokens iframe ↔ window.
-            </p>
+            <p class="hint" id="tab-caption"></p>
             <div class="iframe-stage" id="stage-embed-sdk">
                 <div id="embed-sdk-root" class="embed-slot"></div>
                 <div class="countdown-overlay hidden" id="overlay-embed-sdk"></div>
