@@ -104,10 +104,7 @@ def apply_auth0_token_set(session: HostSession, token_set: dict[str, Any]) -> No
         session.auth0_access_expires_at = expires_at
     id_token = token_set.get("id_token")
     if id_token:
-        session.auth0_id_token = id_token
         id_claims = decode_jwt_unverified(id_token)
-        session.auth0_id_issued_at = _timestamp_to_datetime(id_claims.get("iat")) or now
-        session.auth0_id_expires_at = _timestamp_to_datetime(id_claims.get("exp"))
         session.auth0_claims = {
             **id_claims,
             **(token_set.get("userinfo") or {}),

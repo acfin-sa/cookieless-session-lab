@@ -111,7 +111,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
   color: var(--accent);
   margin: 0 0 0.4rem;
 }
-.muted, .hint, .tiny, .who { color: var(--muted); }
+.hint, .tiny, .who { color: var(--muted); }
 .tiny { font-size: 0.85rem; }
 
 .btn, button, .tab {
@@ -125,7 +125,6 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 }
 .btn.primary, button.primary { background: #1f4d8a; border-color: #3d7bd6; }
 .btn.danger { background: #5a2020; border-color: #8a3a3a; }
-.btn.ghost { background: transparent; }
 a.btn { text-decoration: none; display: inline-block; }
 
 .lab-header {
@@ -152,10 +151,6 @@ a.btn { text-decoration: none; display: inline-block; }
   flex-shrink: 0;
 }
 .toggle { display: flex; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
-.controls-hint {
-  flex-basis: 100%;
-  margin: 0.15rem 0 0;
-}
 
 .lab-grid {
   display: flex;
@@ -248,12 +243,6 @@ a.btn { text-decoration: none; display: inline-block; }
   position: relative;
   z-index: 0;
 }
-.constellation-status { margin: 0 0 0.65rem; }
-.layer-b-row {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.65rem;
-}
 .layer-b-cell {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -276,7 +265,6 @@ a.btn { text-decoration: none; display: inline-block; }
 .token-card h3 { margin: 0; font-size: 0.85rem; }
 .layer { font-size: 0.7rem; color: var(--accent); }
 .storage { color: var(--muted); font-size: 0.72rem; margin: 0.2rem 0 0; }
-.token-card .value { margin: 0.45rem 0; font-family: ui-monospace, monospace; }
 .token-card .meta { color: var(--muted); font-size: 0.72rem; margin: 0.2rem 0 0; }
 .token-card .state-reason,
 .layer-b-cell .state-reason {
@@ -332,20 +320,20 @@ a.btn { text-decoration: none; display: inline-block; }
 .gantt-legend .swatch.state-consumed { background: var(--consumed); }
 .gantt-legend .swatch.state-revoked { background: var(--revoked); }
 .gantt-legend .swatch.state-unborn { background: var(--unborn); }
-.gantt-legend .swatch.hatch {
+.gantt-legend .swatch.state-dotted {
   background: repeating-linear-gradient(
-    35deg,
-    var(--expiring),
-    var(--expiring) 3px,
-    #10141c 3px,
-    #10141c 6px
+    90deg,
+    var(--accent),
+    var(--accent) 2px,
+    transparent 2px,
+    transparent 6px
   );
+  border: 1px solid var(--line);
 }
 
 .gantt { position: relative; overflow-x: auto; background: #10141c; border: 1px solid var(--line); border-radius: 8px; }
 .gantt svg { display: block; min-width: 640px; }
-.gantt-popup-label,
-.gantt-refresh-label {
+.gantt-popup-label {
   position: absolute;
   top: 4px;
   transform: translateX(-50%);
@@ -430,7 +418,6 @@ th { color: var(--muted); font-weight: 600; }
   .resize-handle { display: none; }
   .observatory { flex-basis: auto !important; max-height: 70vh; }
   .token-grid { grid-template-columns: 1fr; }
-  .layer-b-row { grid-template-columns: 1fr; }
   .iframe-pane {
     height: 45vh;
     min-height: 280px;

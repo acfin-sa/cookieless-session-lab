@@ -27,28 +27,10 @@ templates = Jinja2Templates(
 views_router = APIRouter()
 
 
-def _architecture_markdown_source() -> str:
-    """ARCHITECTURE.md is the single source of truth; /architecture renders it."""
-    source = ARCHITECTURE_PATH.read_text(encoding="utf-8")
-    # Show live configured values on the web page (env may override config.py defaults).
-    source = source.replace(
-        "| `HOST_ACCESS_TOKEN_TTL_SECONDS` | `app/config.py` (default **200** s) |",
-        f"| `HOST_ACCESS_TOKEN_TTL_SECONDS` | `app/config.py` (**{HOST_ACCESS_TOKEN_TTL_SECONDS}** s) |",
-    )
-    source = source.replace(
-        "| `LOOKER_EMBED_SESSION_LENGTH` | `.env` (default **720** s) |",
-        f"| `LOOKER_EMBED_SESSION_LENGTH` | `.env` (**{LOOKER_EMBED_SESSION_LENGTH}** s) |",
-    )
-    source = source.replace(
-        "memory only (HOST_ACCESS_TOKEN_TTL_SECONDS, default 200 s)",
-        f"memory only (HOST_ACCESS_TOKEN_TTL_SECONDS = {HOST_ACCESS_TOKEN_TTL_SECONDS} s)",
-    )
-    return source
-
-
 def _render_architecture_html() -> str:
+    source = ARCHITECTURE_PATH.read_text(encoding="utf-8")
     html = markdown.markdown(
-        _architecture_markdown_source(),
+        source,
         extensions=["tables", "fenced_code", "sane_lists"],
     )
     # Template header already shows the document title.
@@ -83,6 +65,8 @@ async def architecture(request: Request):
         name="architecture.html",
         context={
             "architecture_html": _render_architecture_html(),
+            "host_access_token_ttl_seconds": HOST_ACCESS_TOKEN_TTL_SECONDS,
+            "looker_embed_session_length": LOOKER_EMBED_SESSION_LENGTH,
             "logged_in": session is not None and not session.host_session_revoked,
             "user_name": session.display_name() if session else None,
             "user_email": session.email() if session else None,

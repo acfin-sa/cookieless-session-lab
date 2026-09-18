@@ -176,9 +176,9 @@ function renderCards(root) {
     card.innerHTML = `
       <header>
         <span class="layer">${escapeHtml(tokenBadge(token))}</span>
-        <h3>${token.name}</h3>
+        <h3>${escapeHtml(token.name)}</h3>
       </header>
-      <div class="storage">Stored in <code>${token.storage}</code>.${token.purpose ? ` ${escapeHtml(token.purpose)}` : ""}</div>
+      <div class="storage">Stored in <code>${escapeHtml(token.storage)}</code>.${token.purpose ? ` ${escapeHtml(token.purpose)}` : ""}</div>
       <div class="meta"><span>issued at ${token.issued_at ? new Date(token.issued_at).toLocaleTimeString() : "—"} · ${tokenCardTtlMetaLabel(state, remaining, lifetime)}</span></div>
       <div class="ttl-bar"><div class="ttl-fill" title="TTL" style="width:${ttlWidth}%"></div></div>
       <div class="state"><span>${state}${remaining !== null ? ` · ${formatClock(remaining)}` : ""}</span></div>
@@ -258,11 +258,7 @@ function isLookerTokenId(tokenId) {
 
 function ganttLaneRows(laneId) {
   if (laneId === "iframe") {
-    const iframeSessions = [...(snapshot.iframe_sessions || [])];
-    if (iframeSessions.length === 0 && snapshot.iframe_session) {
-      iframeSessions.push(snapshot.iframe_session);
-    }
-    return iframeSessions;
+    return [...(snapshot.iframe_sessions || [])];
   }
   return (snapshot.tokens || []).filter((token) => tokenLaneId(token) === laneId);
 }
@@ -335,9 +331,6 @@ function findGanttToken(tokenId) {
   const fromIframes = (snapshot.iframe_sessions || []).find((token) => token.id === tokenId);
   if (fromIframes) {
     return fromIframes;
-  }
-  if (snapshot.iframe_session && snapshot.iframe_session.id === tokenId) {
-    return snapshot.iframe_session;
   }
   return null;
 }
@@ -537,11 +530,13 @@ function renderEvents(root) {
     row.dataset.eventId = event.id;
     row.dataset.tokens = [...(event.tokens_in || []), ...(event.tokens_out || [])].join(",");
     const when = event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : "";
+    const tokensIn = escapeHtml((event.tokens_in || []).join(", ") || "—");
+    const tokensOut = escapeHtml((event.tokens_out || []).join(", ") || "—");
     row.innerHTML = `
-      <div><span class="when">${when}</span> · <span class="actor">${event.actor}</span></div>
-      <div><strong>${event.method}</strong></div>
-      <div>${event.summary || ""}</div>
-      <div class="when">in: ${(event.tokens_in || []).join(", ") || "—"} · out: ${(event.tokens_out || []).join(", ") || "—"}</div>
+      <div><span class="when">${escapeHtml(when)}</span> · <span class="actor">${escapeHtml(event.actor)}</span></div>
+      <div><strong>${escapeHtml(event.method)}</strong></div>
+      <div>${escapeHtml(event.summary || "")}</div>
+      <div class="when">in: ${tokensIn} · out: ${tokensOut}</div>
     `;
     root.appendChild(row);
   }
@@ -560,7 +555,7 @@ const CATALOG_GROUPS = [
 ];
 
 function catalogGroupId(method) {
-  return method.group || method.catalog_group || "";
+  return method.group || "";
 }
 
 function joinCatalogList(values) {

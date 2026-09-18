@@ -1,7 +1,6 @@
 let hostAccessToken = null;
 let hostAccessExpiresAt = null;
 let refreshTimer = null;
-let userInfo = null;
 
 function decodeJwtExpiryMilliseconds(token) {
   try {
@@ -64,7 +63,6 @@ export async function fetchWithHostAccessToken(path, options = {}) {
 
 function storeHostAccessToken(payload) {
   hostAccessToken = payload.host_access_token;
-  userInfo = payload.user || userInfo;
   hostAccessExpiresAt = payload.expires_at
     ? Date.parse(payload.expires_at)
     : decodeJwtExpiryMilliseconds(hostAccessToken);

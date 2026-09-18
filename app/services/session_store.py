@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+HISTORY_LIMIT = 250
+
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -61,11 +63,8 @@ class HostSession:
     auth0_refresh_token: str | None = None
     auth0_refresh_issued_at: datetime | None = None
     auth0_access_token: str | None = None
-    auth0_id_token: str | None = None
     auth0_access_issued_at: datetime | None = None
     auth0_access_expires_at: datetime | None = None
-    auth0_id_issued_at: datetime | None = None
-    auth0_id_expires_at: datetime | None = None
 
     host_access_token: str | None = None
     host_access_token_jti: str | None = None
@@ -108,6 +107,8 @@ class HostSession:
 
     def record_refresh_marker(self, process: str) -> None:
         self.refresh_markers.append({"at": utc_now(), "process": process})
+        if len(self.refresh_markers) > HISTORY_LIMIT:
+            self.refresh_markers = self.refresh_markers[-HISTORY_LIMIT:]
 
     def mark_looker_session_revoked(self) -> None:
         self.looker_session_revoked = True
@@ -190,8 +191,8 @@ class HostSession:
 
     def append_event(self, event: LabEvent) -> LabEvent:
         self.events.append(event)
-        if len(self.events) > 250:
-            self.events = self.events[-250:]
+        if len(self.events) > HISTORY_LIMIT:
+            self.events = self.events[-HISTORY_LIMIT:]
         return event
 
     def display_name(self) -> str:

@@ -8,6 +8,9 @@ from services.observatory import build_observatory_snapshot
 
 lab_router = APIRouter(prefix="/api/lab", tags=["lab"])
 
+IFRAME_LOGIN_EVENT_METHOD = "iframe navigation to embed login URL"
+IFRAME_SESSION_EVENT_METHODS = frozenset({"session:status", "session:expired"})
+
 
 @lab_router.get("/snapshot")
 async def observatory_snapshot(request: Request):
@@ -27,10 +30,10 @@ async def record_client_event(request: Request):
     ok = bool(body.get("ok", True))
     expired = bool(body.get("expired", False))
     embed_client = str(body.get("embed_client") or "")
-    if method == "iframe navigation to embed login URL":
+    if method == IFRAME_LOGIN_EVENT_METHOD:
         session.mark_authentication_consumed()
         session.mark_iframe_started(embed_client)
-    if method in {"session:status", "session:expired"} and (not ok or expired):
+    if method in IFRAME_SESSION_EVENT_METHODS and (not ok or expired):
         # Session-level “I can’t keep working.” Not “nav died” or “api died.”
         # Do not smash each JWT’s exp — cards follow their own clocks.
         # Ignore expiry for an iframe that was never started (raw postMessage

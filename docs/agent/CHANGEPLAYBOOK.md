@@ -47,13 +47,12 @@ Invariants first: [INVARIANTS.md](INVARIANTS.md). Map: [CODEMAP.md](CODEMAP.md).
 4. Snapshot `flags` in `build_observatory_snapshot`.
 5. Document failure mode in INVARIANTS / README demo.
 
-## Verify (no automated tests)
-
-There is no `npm test` and no pytest suite.
+## Verify
 
 ```bash
 npm run build:js
 .venv/bin/python -m compileall -q app
+.venv/bin/python -m pytest -q
 ```
 
 `scripts/local.sh` starts uvicorn only; it does not install deps or bundle JS. Use `npm run dev` for the full lab.
@@ -70,9 +69,9 @@ Manual `/lab` checks:
 8. `/sequence` still matches `docs/sequence-happy-path.mmd` (happy-path postMessage).
 9. If token-moving methods changed, `/lab` catalog matches `docs/token-method-map.json`.
 
-## Architecture page TTL injection
+## Architecture page live TTLs
 
-`views._architecture_markdown_source` replaces exact substrings in
-`ARCHITECTURE.md` (host TTL default 200 s, Looker session length default 720 s,
-and the phrase `memory only (HOST_ACCESS_TOKEN_TTL_SECONDS, default 200 s)`).
-Keep those phrases if you edit the lifetimes table.
+`ARCHITECTURE.md` keeps the repository defaults (host TTL 200 s, Looker session
+length 720 s). `/architecture` renders that file as-is and prints this process's
+live `HOST_ACCESS_TOKEN_TTL_SECONDS` and `LOOKER_EMBED_SESSION_LENGTH` beside
+the article. Do not string-replace the markdown.

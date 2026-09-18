@@ -125,8 +125,17 @@ async def logout(request: Request):
             end_embed_session(session, request_user_agent(request))
         except LookerNotConfigured:
             pass
-        except Exception:
-            pass
+        except Exception as error:
+            log_event(
+                session,
+                method="logout",
+                actor="Host API",
+                summary=f"Looker end during logout failed: {error}",
+                tokens_in=["session_reference_token"],
+                tokens_out=[],
+                ok=False,
+                error=str(error),
+            )
         await revoke_auth0_refresh(session)
         session.host_session_revoked = True
         log_event(

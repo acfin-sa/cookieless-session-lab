@@ -24,10 +24,11 @@ function onElementEvent(id, event, handler) {
 }
 
 function showLabError(message) {
-  document.body.insertAdjacentHTML(
-    "afterbegin",
-    `<p class="hint" style="padding:1rem">${message}</p>`
-  );
+  const paragraph = document.createElement("p");
+  paragraph.className = "hint";
+  paragraph.style.padding = "1rem";
+  paragraph.textContent = message;
+  document.body.insertAdjacentElement("afterbegin", paragraph);
 }
 
 function bindWidthSplit() {
@@ -175,6 +176,7 @@ function initLabUi() {
       await startSelectedTab();
     });
   });
+  selectTab(selectedTab);
 
   onElementEvent("toggle-freeze", "change", async (event) => {
     await fetchWithHostAccessToken("/api/lab/controls", {
