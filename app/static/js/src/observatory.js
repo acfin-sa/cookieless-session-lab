@@ -42,7 +42,12 @@ function currentTokenState(token) {
   if (!token.expires_at) {
     return token.present ? "alive" : "unborn";
   }
-  const remaining = (Date.parse(token.expires_at) - Date.now()) / 1000;
+
+  const expiresAtMs = Date.parse(token.expires_at);
+  if (Number.isNaN(expiresAtMs)) {
+    return token.present ? "alive" : "unborn";
+  }
+  const remaining = (expiresAtMs - Date.now()) / 1000;
   if (remaining <= 0) {
     return "expired";
   }
@@ -56,7 +61,11 @@ function remainingSeconds(token) {
   if (!token.expires_at) {
     return null;
   }
-  return Math.max(0, Math.floor((Date.parse(token.expires_at) - Date.now()) / 1000));
+  const expiresAtMs = Date.parse(token.expires_at);
+  if (Number.isNaN(expiresAtMs)) {
+    return null;
+  }
+  return Math.max(0, Math.floor((expiresAtMs - Date.now()) / 1000));
 }
 
 function formatClock(seconds) {
@@ -163,9 +172,12 @@ function renderCards(root) {
     const remaining = remainingSeconds(token);
     const lifetime = tokenLifetimeSeconds(token);
     const originalTtl = token.ttl_seconds || lifetime;
-    const ttlRatio = remaining === null || !originalTtl
-      ? (token.present ? 1 : 0)
-      : Math.min(1, remaining / Math.max(originalTtl, 1));
+    let ttlRatio;
+    if (remaining === null || !originalTtl) {
+      ttlRatio = token.present ? 1 : 0;
+    } else {
+      ttlRatio = Math.min(1, remaining / Math.max(originalTtl, 1));
+    }
     const card = document.createElement("article");
     card.className = `token-card state-${state}`;
     card.dataset.token = token.id;
@@ -173,7 +185,7 @@ function renderCards(root) {
     const reason = token.state_reason
       ? `<p class="state-reason">${escapeHtml(token.state_reason)}</p>`
       : "";
-    card.innerHTML = `
+      card.innerHTML = `
       <header>
         <span class="layer">${escapeHtml(tokenBadge(token))}</span>
         <h3>${escapeHtml(token.name)}</h3>
@@ -417,6 +429,10 @@ function renderGantt(root) {
     return;
   }
   const t0 = Date.parse(snapshot.login_started_at);
+  if (Number.isNaN(t0)) {
+    root.innerHTML = "";
+    return;
+  }
   const now = Date.now();
   const horizon = Math.max(now - t0 + 60_000, 12 * 60_000);
   const horizonEndMs = t0 + horizon;
@@ -526,7 +542,7 @@ function renderEvents(root) {
   const events = [...(snapshot.events || [])].reverse();
   for (const event of events) {
     const row = document.createElement("div");
-    row.className = `event-row${isLookerEvent(event) ? " looker" : ""}${event.ok ? "" : " fail"}${event.id === selectedEventId ? " active" : ""}`;
+    row.className = `event-row${isLookerEvent(event) ? " looker" : ""}${event.ok ? "" : " fail"}${String(event.id) === String(selectedEventId) ? " active" : ""}`;
     row.dataset.eventId = event.id;
     row.dataset.tokens = [...(event.tokens_in || []), ...(event.tokens_out || [])].join(",");
     const when = event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : "";
@@ -536,7 +552,7 @@ function renderEvents(root) {
       <div><span class="when">${escapeHtml(when)}</span> · <span class="actor">${escapeHtml(event.actor)}</span></div>
       <div><strong>${escapeHtml(event.method)}</strong></div>
       <div>${escapeHtml(event.summary || "")}</div>
-      <div class="when">in: ${tokensIn} · out: ${tokensOut}</div>
+      <div class="when">in: ${joinCatalogList(event.tokens_in) || "—"} · out: ${joinCatalogList(event.tokens_out) || "—"}</div>
     `;
     root.appendChild(row);
   }
@@ -694,29 +710,42 @@ export function bindObservatory(elements) {
     renderGantt(elements.gantt);
   });
 
+  let pollInFlight = false;
   async function poll() {
-    snapshot = await fetchWithHostAccessToken("/api/lab/snapshot");
-    renderCards(elements.cards);
-    renderGantt(elements.gantt);
-    renderEvents(elements.events);
-    if (elements.freeze) {
-      elements.freeze.checked = Boolean(snapshot.flags.freeze_token_refresh);
+    if (pollInFlight) {
+      return;
     }
-    if (elements.userAgentMismatchToggle) {
-      elements.userAgentMismatchToggle.checked = Boolean(snapshot.flags.force_user_agent_mismatch);
+    pollInFlight = true;
+    try {
+      const nextSnapshot = await fetchWithHostAccessToken("/api/lab/snapshot");
+      if (!nextSnapshot || typeof nextSnapshot !== "object") {
+        return;
+      }
+      snapshot = nextSnapshot;
+      renderCards(elements.cards);
+      renderGantt(elements.gantt);
+      renderEvents(elements.events);
+      if (elements.freeze) {
+        elements.freeze.checked = Boolean(snapshot.flags?.freeze_token_refresh);
+      }
+      if (elements.userAgentMismatchToggle) {
+        elements.userAgentMismatchToggle.checked = Boolean(snapshot.flags?.force_user_agent_mismatch);
+      }
+    } catch (error) {
+      console.warn("Observatory snapshot poll failed", error);
+    } finally {
+      pollInFlight = false;
     }
   }
 
-  poll().catch((error) => console.warn(error));
+  poll();
   setInterval(() => {
     if (snapshot) {
       renderCards(elements.cards);
       renderGantt(elements.gantt);
     }
   }, 1000);
-  setInterval(() => {
-    poll().catch((error) => console.warn(error));
-  }, 4000);
+  setInterval(poll, 4000);
 
   return { poll };
 }

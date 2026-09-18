@@ -10,14 +10,26 @@ const envFile = path.join(root, ".env");
 const envExample = path.join(root, ".env.example");
 
 if (!existsSync(venvPython)) {
-  spawnSync(process.execPath, [path.join(root, "scripts/ensure-venv.mjs")], {
+  const venv = spawnSync(process.execPath, [path.join(root, "scripts/ensure-venv.mjs")], {
     cwd: root,
     stdio: "inherit",
   });
+  if (venv.error || venv.status !== 0) {
+    process.exit(venv.status ?? 1);
+  }
 }
 
-const esbuildBin = path.join(root, "node_modules", ".bin", "esbuild");
+const esbuildBin = path.join(
+  root,
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "esbuild.cmd" : "esbuild",
+);
 
+if (!existsSync(esbuildBin)) {
+  console.error("[cookieless-session-lab] missing esbuild — run npm install");
+  process.exit(1);
+}
 if (!existsSync(envFile)) {
   console.warn(
     `[cookieless-session-lab] missing .env — copy ${envExample} to .env and fill secrets before login/Looker will work.`
@@ -34,10 +46,13 @@ const esbuildArgs = [
   "--sourcemap",
 ];
 
-spawnSync(esbuildBin, esbuildArgs, {
+const bundle = spawnSync(esbuildBin, esbuildArgs, {
   cwd: root,
   stdio: "inherit",
 });
+if (bundle.error || bundle.status !== 0) {
+  process.exit(bundle.status ?? 1);
+}
 
 const children = [];
 

@@ -22,6 +22,8 @@ async def observatory_snapshot(request: Request):
 async def record_client_event(request: Request):
     session = require_bearer_session(request)
     body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="JSON object required")
     method = str(body.get("method") or "client-event")
     actor = str(body.get("actor") or "Browser")
     summary = str(body.get("summary") or "")

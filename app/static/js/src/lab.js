@@ -143,19 +143,28 @@ function selectTab(tab) {
       : "Raw postMessage tab: you will see session:tokens:request and session:tokens in the log.";
 }
 
+let tabStartGeneration = 0;
 async function startSelectedTab() {
-  if (selectedTab === mountedEmbedTab) {
+  const generation = ++tabStartGeneration;
+  const tab = selectedTab;
+  if (tab === mountedEmbedTab) {
     return;
   }
-  if (selectedTab === EMBED_SDK_TAB) {
+  if (tab === EMBED_SDK_TAB) {
     stopPostMessageTab();
-    mountedEmbedTab = EMBED_SDK_TAB;
     startEmbedSdkTab(pageConfig);
+    if (generation === tabStartGeneration) {
+      mountedEmbedTab = EMBED_SDK_TAB;
+    }
     return;
   }
   stopEmbedSdkTab();
-  mountedEmbedTab = POSTMESSAGE_TAB;
   await startPostMessageTab(pageConfig);
+  if (generation !== tabStartGeneration) {
+    stopPostMessageTab();
+    return;
+  }
+  mountedEmbedTab = POSTMESSAGE_TAB;
 }
 
 function initLabUi() {
@@ -178,34 +187,55 @@ function initLabUi() {
   });
   selectTab(selectedTab);
 
+  async function postLabControl(body, revert) {
+    try {
+      await fetchWithHostAccessToken("/api/lab/controls", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      await observatory.poll();
+    } catch (error) {
+      if (revert) {
+        revert();
+      }
+      showLabError(`Lab control request failed: ${error.message}`);
+    }
+  }
+
   onElementEvent("toggle-freeze", "change", async (event) => {
-    await fetchWithHostAccessToken("/api/lab/controls", {
-      method: "POST",
-      body: JSON.stringify({ freeze_token_refresh: event.target.checked }),
+    const checked = event.target.checked;
+    await postLabControl({ freeze_token_refresh: checked }, () => {
+      event.target.checked = !checked;
     });
-    await observatory.poll();
   });
 
   onElementEvent("toggle-user-agent-mismatch", "change", async (event) => {
-    await fetchWithHostAccessToken("/api/lab/controls", {
-      method: "POST",
-      body: JSON.stringify({ force_user_agent_mismatch: event.target.checked }),
+    const checked = event.target.checked;
+    await postLabControl({ force_user_agent_mismatch: checked }, () => {
+      event.target.checked = !checked;
     });
-    await observatory.poll();
   });
 
   onElementEvent("btn-drop-session-reference", "click", async () => {
-    await fetchWithHostAccessToken("/api/lab/drop-session-reference", { method: "POST" });
-    await observatory.poll();
+    try {
+      await fetchWithHostAccessToken("/api/lab/drop-session-reference", { method: "POST" });
+      await observatory.poll();
+    } catch (error) {
+      showLabError(`Drop session reference failed: ${error.message}`);
+    }
   });
 
   onElementEvent("btn-end-looker", "click", async () => {
-    await fetchWithHostAccessToken("/api/looker/end-embed-session", { method: "POST" });
-    stopEmbedSdkTab();
-    stopPostMessageTab();
-    mountedEmbedTab = null;
-    await startSelectedTab();
-    await observatory.poll();
+    try {
+      await fetchWithHostAccessToken("/api/looker/end-embed-session", { method: "POST" });
+      stopEmbedSdkTab();
+      stopPostMessageTab();
+      mountedEmbedTab = null;
+      await startSelectedTab();
+      await observatory.poll();
+    } catch (error) {
+      showLabError(`End Looker session failed: ${error.message}`);
+    }
   });
 
   setInterval(updateExpiryCountdownOverlays, 1000);

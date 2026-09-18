@@ -5,15 +5,27 @@ let embedSdk = null;
 let pageConfig = null;
 
 async function acquireSession() {
-  const tokens = await fetchWithHostAccessToken("/api/looker/acquire-embed-session", { method: "POST", body: "{}" });
-  await reportEvent({
-    method: "POST /api/looker/acquire-embed-session",
-    actor: "Browser",
-    summary: "Embed SDK acquire callback received browser-safe tokens",
-    tokens_in: ["host_access_token"],
-    tokens_out: ["authentication_token", "navigation_token", "api_token"],
-  });
-  return tokens;
+  try {
+    const tokens = await fetchWithHostAccessToken("/api/looker/acquire-embed-session", { method: "POST", body: "{}" });
+    reportEvent({
+      method: "POST /api/looker/acquire-embed-session",
+      actor: "Browser",
+      summary: "Embed SDK acquire callback received browser-safe tokens",
+      tokens_in: ["host_access_token"],
+      tokens_out: ["authentication_token", "navigation_token", "api_token"],
+    });
+    return tokens;
+  } catch (error) {
+    reportEvent({
+      method: "POST /api/looker/acquire-embed-session",
+      actor: "Browser",
+      summary: String(error),
+      ok: false,
+      error: String(error),
+      embed_client: "sdk",
+    });
+    throw error;
+  }
 }
 
 async function generateTokens(_tokensFromIframe) {
@@ -57,10 +69,9 @@ function coldStartDashboardFilters() {
 }
 
 function mountDashboard(containerSelector) {
-  if (!embedSdk) {
-    embedSdk = getEmbedSDK();
-    embedSdk.initCookieless(pageConfig.lookerEmbedHost, acquireSession, generateTokens);
-  }
+  embedSdk = getEmbedSDK();
+  embedSdk.initCookieless(pageConfig.lookerEmbedHost, acquireSession, generateTokens);
+
   const builder = embedSdk
     .createDashboardWithId(String(pageConfig.lookerDashboardId))
     .appendTo(containerSelector)
@@ -95,7 +106,11 @@ function mountDashboard(containerSelector) {
     })
     .build()
     .connect()
-    .then(() => {
+    .then((connection) => {
+      if (generation !== mountGeneration) {
+        return;
+      }
+      dashboardConnection = connection;
       reportEvent({
         method: "iframe navigation to embed login URL",
         actor: "Browser",
@@ -119,9 +134,13 @@ function mountDashboard(containerSelector) {
 
 export function startEmbedSdkTab(config) {
   pageConfig = config;
-  document.getElementById("embed-sdk-root").innerHTML = "";
+  const root = document.getElementById("embed-sdk-root");
+  if (!root) {
+    return;
+  }
+  root.innerHTML = "";
   if (!config.lookerDashboardId || !config.lookerEmbedHost) {
-    document.getElementById("embed-sdk-root").textContent =
+    root.textContent =
       "Set LOOKER_EMBED_HOST and LOOKER_EMBED_DASHBOARD_ID in .env";
     return;
   }

@@ -9,13 +9,15 @@ if (!target) {
 if (!sourceNode) {
   target.textContent = "Missing mermaid source on sequence.html";
 }
-
-const mermaidSource = JSON.parse(sourceNode.textContent);
-const MERMAID_MODULE_URL = JSON.parse(mermaidModuleUrlNode.textContent);
-if (!MERMAID_MODULE_URL) {
-  throw new Error("MERMAID_MODULE_URL is empty");
+if (!mermaidModuleUrlNode) {
+  target.textContent = "Missing mermaid module URL on sequence.html";
 }
 
-renderMermaid(target, mermaidSource, MERMAID_MODULE_URL).catch((error) => {
-  target.textContent = error.message;
-});
+try {
+  const mermaidSource = JSON.parse(sourceNode.textContent);
+  renderMermaid(target, mermaidSource).catch((error) => {
+    target.textContent = error.message;
+  });
+} catch (error) {
+  target.textContent = error instanceof Error ? error.message : "Failed to parse mermaid source";
+}

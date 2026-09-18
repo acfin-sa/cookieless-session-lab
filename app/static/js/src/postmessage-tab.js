@@ -99,6 +99,12 @@ async function handleLookerIframeMessage(event) {
   if (data.type !== "session:tokens:request") {
     return;
   }
+  const iframeWindow = event.source;
+  const isFirstReply =
+    !connectedIframeWindows.has(iframeWindow) && browserHeldEmbedTokens;
+  if (isFirstReply) {
+    connectedIframeWindows.add(iframeWindow);
+  }
   await reportRawEvent({
     method: "postMessage session:tokens:request",
     actor: "iframe postMessage",
@@ -106,9 +112,7 @@ async function handleLookerIframeMessage(event) {
     tokens_in: [],
     tokens_out: [],
   });
-  const iframeWindow = event.source;
-  if (!connectedIframeWindows.has(iframeWindow) && browserHeldEmbedTokens) {
-    connectedIframeWindows.add(iframeWindow);
+  if (isFirstReply) {
     postSessionTokensToIframe(iframeWindow, browserHeldEmbedTokens);
     await reportRawEvent({
       method: "postMessage session:tokens",

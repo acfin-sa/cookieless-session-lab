@@ -8,8 +8,8 @@
   --expiring: #f0b429;
   --expired: #ef5b5b;
   --consumed: #b57bff;
-  --revoked: #c45c5c;
-  --unborn: #5b6578;
+  --revoked: #e08a4f;
+  --unborn: #9aa6bb;
   --accent: #6cb6ff;
 }
 
@@ -123,6 +123,13 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
   color: var(--ink);
   padding: 0.45rem 0.8rem;
 }
+.btn:focus-visible,
+button:focus-visible,
+.tab:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .btn.primary, button.primary { background: #1f4d8a; border-color: #3d7bd6; }
 .btn.danger { background: #5a2020; border-color: #8a3a3a; }
 a.btn { text-decoration: none; display: inline-block; }
@@ -234,6 +241,7 @@ a.btn { text-decoration: none; display: inline-block; }
   border-radius: 8px;
   font-variant-numeric: tabular-nums;
   z-index: 3;
+  pointer-events: none;
 }
 .hidden { display: none !important; }
 
@@ -260,6 +268,15 @@ a.btn { text-decoration: none; display: inline-block; }
   border-radius: 8px;
   padding: 0.5rem;
   font-size: 0.82rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.token-card .value,
+.token-card code,
+.token-card .method-line {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .token-card.hot { outline: 2px solid var(--accent); }
 .token-card header { display: flex; justify-content: space-between; gap: 0.4rem; align-items: baseline; }
@@ -380,7 +397,11 @@ a.btn { text-decoration: none; display: inline-block; }
   cursor: pointer;
   font-size: 0.8rem;
 }
-.event-row:hover, .event-row.active { background: #222a38; }
+.event-row:hover, .event-row.active, .event-row:focus-visible { background: #222a38; }
+.event-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 .event-row.looker { background: #1a283c; }
 .event-row.looker:hover, .event-row.looker.active { background: #22324a; }
 .event-row.fail { border-left: 3px solid var(--expired); }
@@ -416,8 +437,14 @@ th { color: var(--muted); font-weight: 600; }
     min-height: 0;
     border-bottom: 1px solid var(--line);
   }
-  .resize-handle { display: none; }
-  .observatory { flex-basis: auto !important; max-height: 70vh; }
+  .resize-handle {
+    display: none;
+    pointer-events: none;
+  }
+  .observatory {
+    flex: 0 1 auto !important;
+    max-height: 70vh;
+  }
   .token-grid { grid-template-columns: 1fr; }
   .iframe-pane {
     height: 45vh;

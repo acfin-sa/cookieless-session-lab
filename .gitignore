@@ -12,6 +12,9 @@ node_modules/
 app/static/js/dist/
 .DS_Store
 keys/
-*.ini
+*.pem
+*.key
+*.p12
+looker.ini
 .idea/
 .vscode/

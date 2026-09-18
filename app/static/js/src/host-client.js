@@ -4,7 +4,13 @@ let refreshTimer = null;
 
 function decodeJwtExpiryMilliseconds(token) {
   try {
-    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    const parts = token.split(".");
+    if (parts.length < 2 || !parts[1]) {
+      return null;
+    }
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+    const payload = JSON.parse(atob(padded));
     return payload.exp ? payload.exp * 1000 : null;
   } catch {
     return null;
@@ -43,7 +49,9 @@ export async function fetchWithHostAccessToken(path, options = {}) {
       headers,
     });
     if (!retry.ok) {
-      throw new Error(await readErrorDetail(retry));
+      const error = new Error(await readErrorDetail(retry));
+      error.status = retry.status;
+      throw error;
     }
     if (retry.status === 204) {
       return null;
@@ -96,19 +104,28 @@ export async function bootstrapHostSession() {
   return payload;
 }
 
+let refreshInFlight = null;
 export async function refreshHostAccessToken() {
-  const payload = await fetch("/api/host/refresh", {
-    method: "POST",
-    credentials: "same-origin",
-  }).then(async (response) => {
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+  refreshInFlight = (async () => {
+    const response = await fetch("/api/host/refresh", {
+      method: "POST",
+      credentials: "same-origin",
+    });
     if (!response.ok) {
       throw new Error(await readErrorDetail(response));
     }
-    return response.json();
+    const payload = await response.json();
+    storeHostAccessToken(payload);
+    return payload;
+  })().finally(() => {
+    refreshInFlight = null;
   });
-  storeHostAccessToken(payload);
-  return payload;
+  return refreshInFlight;
 }
+
 
 export async function reportEvent(event) {
   try {

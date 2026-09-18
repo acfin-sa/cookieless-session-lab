@@ -12,9 +12,14 @@ load_dotenv(ROOT_DIR / ".env")
 
 def parse_bool_env(name: str, default: bool = False) -> bool:
     raw = os.getenv(name)
-    if raw is None:
+    if raw is None or not raw.strip():
         return default
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
+    value = raw.strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"Invalid boolean for {name}: {raw!r}")
 
 
 def parse_csv_env(name: str, default: str = "") -> list[str]:
