@@ -10,6 +10,7 @@ Auth0 OAuth routes — Layer A happy path:
 """
 from __future__ import annotations
 
+import asyncio
 from urllib.parse import urlencode
 from uuid import uuid4
 
@@ -122,7 +123,9 @@ async def logout(request: Request):
     session = session_from_cookie(request)
     if session is not None:
         try:
-            end_embed_session(session, request_user_agent(request))
+            await asyncio.to_thread(
+                end_embed_session, session, request_user_agent(request)
+            )
         except LookerNotConfigured:
             pass
         except Exception as error:
