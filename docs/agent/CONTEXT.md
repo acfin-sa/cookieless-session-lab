@@ -1,6 +1,16 @@
 # System context
 
-Human companion: [ARCHITECTURE.md](../../ARCHITECTURE.md). Index: [AGENTS.md](../../AGENTS.md).
+This file is the detailed source of truth for trust boundaries, token
+inventory, storage, renew paths, User-Agent, logout, and embed clients.
+File/route/symbol map: [CODEMAP.md](CODEMAP.md). MUST / MUST NOT:
+[INVARIANTS.md](INVARIANTS.md). Method catalog:
+[docs/token-method-map.json](../token-method-map.json). Index:
+[AGENTS.md](../../AGENTS.md).
+
+Human companions teach the model and should link here for depth, not copy
+these matrices: [README.md](../../README.md),
+[ARCHITECTURE.md](../../ARCHITECTURE.md),
+[docs/cookieless-brief.md](../cookieless-brief.md).
 
 ## Layers
 
@@ -17,10 +27,10 @@ Auth0 proves the human
 
 | Boundary | Trusted | Untrusted | Contract |
 | --- | --- | --- | --- |
-| Browser → host cookie routes | `HostSession` | cookie value | Cookie locates; does not authorize Looker |
-| Browser → host bearer routes | signing key `APP_KEY_SECRET` | JWT | `/api/looker/*` and `/api/lab/*` require current `jti` |
+| Browser → host cookie routes | `HostSession` | cookie value | HttpOnly, `SameSite=Lax` cookie (`Secure` when `APP_BASE_URL` is https) locates the record; does not authorize Looker |
+| Browser → host bearer routes | signing key `APP_KEY_SECRET` | JWT | HS256; `typ=host_access`; HostSession from JWT claim `hsid`; not revoked; current `jti`. Required on `/api/looker/*` and `/api/lab/*` |
 | Host → Auth0 | client secret + stored refresh | browser | Auth0 tokens never returned to JS |
-| Host → Looker API | API credentials + `session_reference_token` | iframe / JS | Host chooses session; JSON stripped of reference |
+| Host → Looker API | API credentials + `session_reference_token` | iframe / JS | Host chooses session; JSON stripped of reference; acquire sends `embed_domain=APP_BASE_URL` |
 | Browser → iframe | origin + `event.source` (raw tab) | Looker frame | Deliver nav/api only; never session reference |
 
 ## Token inventory
@@ -58,7 +68,7 @@ remains `session_reference_token`. Observatory `badge` comes from
 
 | Handle | Browser cookie | Browser memory | Server `HostSession` |
 | --- | --- | --- | --- |
-| `host_session_id` | yes, HttpOnly | no | store key `_sessions_by_id` |
+| `host_session_id` | yes, HttpOnly, `SameSite=Lax` | no | store key `_sessions_by_id` |
 | `host_access_token` | no | yes (`host-client.js`) | copy for observatory |
 | Auth0 refresh/access/id | no | no | yes |
 | `session_reference_token` | no | no | yes |
@@ -67,6 +77,23 @@ remains `session_reference_token`. Observatory `badge` comes from
 | `oauth_pkce_state` | SessionMiddleware cookie, 600s | no | Starlette session, not HostSession |
 
 `SessionStore` (`app/services/session_store.py`) is keyed **only** by `host_session_id`. There is no Auth0 `sub` index.
+
+## Configured lifetimes
+
+Repository-controlled knobs (locations in [CODEMAP.md](CODEMAP.md)):
+
+| Handle | Default | Where |
+| --- | --- | --- |
+| `host_access_token` | 200 s | `HOST_ACCESS_TOKEN_TTL_SECONDS` in `app/config.py` (hardcoded, not `.env`) |
+| Looker `session_length` | 720 s | `LOOKER_EMBED_SESSION_LENGTH` |
+| `host_session_id` cookie | 12 h | `HOST_SESSION_COOKIE_MAX_AGE` |
+| `oauth_pkce_state` | 600 s | SessionMiddleware in `app/web.py` |
+
+Auth0 access/refresh durations come from the Auth0 tenant, not lab env. Looker
+returns `authentication_token_ttl`, `navigation_token_ttl`, `api_token_ttl`,
+and `session_reference_token_ttl`. Typical Looker values are authentication
+~30 s and navigation/API ~10 minutes; the UI follows returned values rather
+than assuming them.
 
 ## User-Agent
 
@@ -82,8 +109,8 @@ MUST NOT document “always the original login UA.”
 | --- | --- | --- |
 | Host bootstrap | `POST /api/host/bootstrap` → `bootstrap_host_access_token` | cookie; mint if missing or &lt;30s to expiry |
 | Host refresh | `POST /api/host/refresh` → `refresh_host_access_token` | cookie; optional `refresh_auth0_tokens`; always mint host JWT |
-| Looker acquire | `POST /api/looker/acquire-embed-session` → `looker_client.acquire_embed_session` | create or reattach via stored reference; new auth token |
-| Looker generate | `PUT /api/looker/generate-embed-tokens` → `looker_client.generate_embed_tokens` | identity from HostSession, not body |
+| Looker acquire | `POST /api/looker/acquire-embed-session` → `looker_client.acquire_embed_session` | `embed_domain=APP_BASE_URL`; create or reattach via stored reference; new auth token |
+| Looker generate | `PUT /api/looker/generate-embed-tokens` → `looker_client.generate_embed_tokens` | identity from HostSession, not body; if Looker returns a replacement `session_reference_token`, the server stores it |
 | Freeze | `HostSession.freeze_token_refresh` | generate returns 200 + `frozen: true`, no Looker rotate |
 | Dead session | `session_reference_token_ttl == 0` | `LookerSessionDead` → HTTP 409 `code: SESSION_DEAD` |
 
@@ -92,6 +119,11 @@ Acquire is not generate. Auth0 code exchange is not host refresh.
 ## `session:expired`
 
 Iframe `session:expired` / `session:status` with `expired=true` (`POST /api/lab/events`) calls `HostSession.mark_iframe_expired`. It MUST NOT revoke `session_reference_token`, smash nav/api `expires_at`, or un-consume `authentication_token`.
+
+The observatory therefore keeps separate nav/api expiry clocks, separate
+session-level state for each SDK/raw iframe, and the session reference alive
+until Looker reports zero TTL, the host ends Layer B, or the lab drops its
+local reference.
 
 ## Logout
 

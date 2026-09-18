@@ -1,6 +1,31 @@
 # Change playbook
 
 Invariants first: [INVARIANTS.md](INVARIANTS.md). Map: [CODEMAP.md](CODEMAP.md).
+Lifecycle / boundaries: [CONTEXT.md](CONTEXT.md).
+
+## Agent sources of truth
+
+When routes, tokens, or token-moving methods change, update these so they match
+`app/` (and `app/static/js/src/` when the browser contract changes):
+
+| File | Owns |
+| --- | --- |
+| [`docs/token-method-map.json`](../token-method-map.json) | Method catalog + token `badge` |
+| [INVARIANTS.md](INVARIANTS.md) | MUST / MUST NOT |
+| [CODEMAP.md](CODEMAP.md) | Files, routes, symbols, config knobs |
+| [CONTEXT.md](CONTEXT.md) | Trust boundaries, token lifecycle, storage, renew, UA, logout, embed clients |
+
+Human docs (`README.md`, `ARCHITECTURE.md`, `docs/cookieless-brief.md`) teach
+the model. After a surface change, fix a sentence, trade-off, or demo step if
+the teaching became wrong. Do not re-copy the full inventory into those files.
+
+## Docs match code
+
+1. `token-method-map.json` if the method moves tokens or badges change.
+2. INVARIANTS if a MUST / MUST NOT changes.
+3. CODEMAP for paths, handlers, store fields, and knobs.
+4. CONTEXT for lifecycle, boundaries, storage, renew, UA, logout, or embed clients.
+5. Human docs only as teaching — not as a second full inventory.
 
 ## Safe edit zones
 
@@ -9,7 +34,7 @@ Invariants first: [INVARIANTS.md](INVARIANTS.md). Map: [CODEMAP.md](CODEMAP.md).
 | `app/templates/*`, `app/static/css/lab.css` | observatory layout/copy |
 | `app/static/js/src/observatory.js` | render-only (do not smash token clocks) |
 | `docs/token-method-map.json` | catalog rows when methods/tokens change |
-| Human docs (`README.md`, `ARCHITECTURE.md`, `docs/cookieless-brief.md`) | teaching prose |
+| Human docs (`README.md`, `ARCHITECTURE.md`, `docs/cookieless-brief.md`) | teaching prose; not a second inventory |
 | Agent docs (`docs/agent/*`, `AGENTS.md`) | contracts; must match code |
 
 ## Never “simplify away”
@@ -30,7 +55,7 @@ Invariants first: [INVARIANTS.md](INVARIANTS.md). Map: [CODEMAP.md](CODEMAP.md).
 3. Update JSON filter if the token is server-only (`looker.py`).
 4. Add `docs/token-method-map.json` `tokens[]` (`layer`, `badge`, `purpose`) + method `tokens_in`/`tokens_out`.
 5. Wire `observatory.py` `TOKEN_VALUE_FROM_SESSION` / `_token_times` / flags.
-6. Update CONTEXT + INVARIANTS.
+6. Update CONTEXT, INVARIANTS, and CODEMAP. Do not add a duplicate token matrix to human docs.
 
 ## Add an event
 
@@ -45,7 +70,7 @@ Invariants first: [INVARIANTS.md](INVARIANTS.md). Map: [CODEMAP.md](CODEMAP.md).
 2. `POST /api/lab/controls` in `app/routes/lab.py`.
 3. Checkbox in `app/templates/lab.html` + handler in `lab.js`.
 4. Snapshot `flags` in `build_observatory_snapshot`.
-5. Document failure mode in INVARIANTS / README demo.
+5. Document the failure mode in INVARIANTS. Add a README demo step only if the teaching path changed.
 
 ## Verify
 
@@ -67,6 +92,7 @@ Manual `/lab` checks:
 7. Logout → this cookie/session gone; do not expect other browsers’ HostSessions gone.
 8. `/sequence` still matches `docs/sequence-happy-path.mmd` (happy-path postMessage).
 9. If token-moving methods changed, `/lab` catalog matches `docs/token-method-map.json`.
+10. If routes, tokens, or token-moving methods changed: token-method-map, INVARIANTS, CODEMAP, and CONTEXT match the code. Human docs were not used as a second full inventory.
 
 ## Architecture page live TTLs
 
