@@ -18,7 +18,7 @@ def request_user_agent(request: Request) -> str:
 def set_host_session_cookie(response: Response, host_session_id: str) -> None:
     # TOKEN: host_session_id (opaque cookie handle, not a constellation token)
     # CREATED BY: GET /callback after Auth0 code exchange
-    # CONSUMED BY: POST /api/host/bootstrap, POST /api/host/refresh, GET /logout
+    # CONSUMED BY: POST /api/host/bootstrap, POST /api/host/refresh, POST /logout
     # LIVES AT: HttpOnly, SameSite=Lax cookie. Secure=True only when APP_BASE_URL is https.
     # TTL: 12 hours or until logout. It does not authorize Looker; it only finds HostSession.
     # WHY: first-party handle the browser can present. High-privilege material stays on the server.

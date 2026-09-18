@@ -15,7 +15,7 @@ from urllib.parse import urlencode
 from uuid import uuid4
 
 from authlib.integrations.starlette_client import OAuth, OAuthError
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from config import (
@@ -27,6 +27,7 @@ from config import (
     public_url,
 )
 from services.auth0_client import revoke_auth0_refresh
+from services.csrf import validate_csrf_token
 from services.host_session_auth import (
     clear_host_session_cookie,
     request_user_agent,
@@ -74,11 +75,11 @@ async def login(request: Request):
 async def callback(request: Request):
     oauth_error = request.query_params.get("error")
     if oauth_error:
-        return RedirectResponse(url=public_url("/logout"), status_code=302)
+        return await perform_logout(request)
     try:
         token_set = await oauth.auth0.authorize_access_token(request)
     except OAuthError:
-        return RedirectResponse(url=public_url("/logout"), status_code=302)
+        return await perform_logout(request)
 
     # TOKEN: auth0_refresh, auth0_access, host_session_reference
     # CREATED BY: Auth0 /oauth/token (code exchange)
@@ -112,8 +113,7 @@ async def callback(request: Request):
     return response
 
 
-@auth0_router.get("/logout")
-async def logout(request: Request):
+async def perform_logout(request: Request) -> RedirectResponse:
     # TOKEN: host_session_id, auth0_refresh, session_reference_token
     # CREATED BY: login / acquire
     # CONSUMED BY: logout — revoke Auth0 refresh, delete Looker session, drop HostSession, clear cookie
@@ -166,3 +166,10 @@ async def logout(request: Request):
     )
     clear_host_session_cookie(response)
     return response
+
+
+@auth0_router.post("/logout")
+async def logout(request: Request, csrf_token: str = Form(...)):
+    if not validate_csrf_token(request, csrf_token):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+    return await perform_logout(request)

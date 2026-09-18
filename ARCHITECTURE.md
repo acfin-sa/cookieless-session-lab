@@ -164,7 +164,7 @@ The observatory therefore keeps:
 Each Auth0 callback creates a separate `HostSession` and cookie. The in-memory
 store is keyed only by `host_session_id`; it has no user index.
 
-`GET /logout` ends the current cookie-selected Looker session, attempts to
+`POST /logout` (CSRF-protected form) ends the current cookie-selected Looker session, attempts to
 revoke that HostSession's Auth0 refresh token, deletes that HostSession, clears
 the cookie, and redirects through Auth0 logout. Another browser's HostSession is
 not deleted by this repository.

@@ -20,6 +20,7 @@ from config import (
     looker_embed_cold_start_filters,
     public_url,
 )
+from services.csrf import csrf_token_for_request
 from services.host_session_auth import session_from_cookie
 from services.observatory import load_method_map
 
@@ -27,6 +28,10 @@ templates = Jinja2Templates(
     directory=str(Path(__file__).resolve().parent.parent / "templates")
 )
 views_router = APIRouter()
+
+
+def template_context(request: Request, **context) -> dict:
+    return {"csrf_token": csrf_token_for_request(request), **context}
 
 
 def _render_architecture_html() -> str:
@@ -66,14 +71,15 @@ async def architecture(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="architecture.html",
-        context={
-            "architecture_html": _render_architecture_html(),
-            "host_access_token_ttl_seconds": HOST_ACCESS_TOKEN_TTL_SECONDS,
-            "looker_embed_session_length": LOOKER_EMBED_SESSION_LENGTH,
-            "logged_in": session is not None and not session.host_session_revoked,
-            "user_name": session.display_name() if session else None,
-            "user_email": session.email() if session else None,
-        },
+        context=template_context(
+            request,
+            architecture_html=_render_architecture_html(),
+            host_access_token_ttl_seconds=HOST_ACCESS_TOKEN_TTL_SECONDS,
+            looker_embed_session_length=LOOKER_EMBED_SESSION_LENGTH,
+            logged_in=session is not None and not session.host_session_revoked,
+            user_name=session.display_name() if session else None,
+            user_email=session.email() if session else None,
+        ),
     )
 
 
@@ -85,12 +91,13 @@ async def lab(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="lab.html",
-        context={
-            "page_config": looker_embed_page_config(),
-            "method_map": load_method_map(),
-            "user_name": session.display_name(),
-            "user_email": session.email(),
-        },
+        context=template_context(
+            request,
+            page_config=looker_embed_page_config(),
+            method_map=load_method_map(),
+            user_name=session.display_name(),
+            user_email=session.email(),
+        ),
     )
 
 
@@ -101,11 +108,12 @@ async def sequence(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="sequence.html",
-        context={
-            "mermaid_source": mermaid_source,
-            "mermaid_module_url": MERMAID_MODULE_URL,
-            "logged_in": session is not None and not session.host_session_revoked,
-            "user_name": session.display_name() if session else None,
-            "user_email": session.email() if session else None,
-        },
+        context=template_context(
+            request,
+            mermaid_source=mermaid_source,
+            mermaid_module_url=MERMAID_MODULE_URL,
+            logged_in=session is not None and not session.host_session_revoked,
+            user_name=session.display_name() if session else None,
+            user_email=session.email() if session else None,
+        ),
     )

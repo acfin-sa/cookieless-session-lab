@@ -20,7 +20,7 @@
             {% if logged_in %}
             <a class="btn" href="/lab">Observatory</a>
             <a class="btn" href="/architecture">Architecture</a>
-            <a class="btn danger" href="/logout">Log out</a>
+            {% include "logout_form.html" %}
             {% else %}
             <a class="btn" href="/">Home</a>
             <a class="btn" href="/architecture">Architecture</a>

@@ -8,12 +8,13 @@ Index: [AGENTS.md](../../AGENTS.md). Invariants: [INVARIANTS.md](INVARIANTS.md).
 | --- | --- |
 | `app/web.py` | FastAPI app, SessionMiddleware (`oauth_pkce_state`, `max_age=600`), `/health` (`health_check`) |
 | `app/config.py` | Env + hardcoded `HOST_ACCESS_TOKEN_TTL_SECONDS`, `LOOKER_MISMATCH_USER_AGENT`, `APP_KEY_SECRET` |
-| `app/routes/auth0.py` | `GET /login`, `/callback`, `/logout` |
+| `app/routes/auth0.py` | `GET /login`, `/callback`, `POST /logout` |
 | `app/routes/host.py` | `POST /api/host/bootstrap`, `/refresh` |
 | `app/routes/looker.py` | Layer B HTTP: acquire / generate / end; `browser_safe_looker_payload` strip; generate freeze/failure logs |
 | `app/routes/lab.py` | Observatory snapshot, events, controls, drop-reference |
 | `app/routes/views.py` | `/`, `/lab`, `/architecture`, `/sequence` |
 | `app/services/session_store.py` | `HostSession`, `LabEvent`, `SessionStore`, `session_store` |
+| `app/services/csrf.py` | `csrf_token_for_request`, `validate_csrf_token` (SessionMiddleware) |
 | `app/services/host_session_auth.py` | Cookie + bearer gates; `HOST_SESSION_COOKIE_MAX_AGE`; `request_user_agent` |
 | `app/services/host_tokens.py` | `mint_host_access_token`, `verify_host_access_token`, `apply_auth0_token_set` |
 | `app/services/auth0_client.py` | `refresh_auth0_tokens`, `revoke_auth0_refresh` |
@@ -40,7 +41,7 @@ Cookie auth (`require_cookie_session`) unless noted.
 | --- | --- | --- | --- |
 | GET | `/login` | `auth0.login` | none |
 | GET | `/callback` | `auth0.callback` | Auth0 code |
-| GET | `/logout` | `auth0.logout` | cookie optional |
+| POST | `/logout` | `auth0.logout` | cookie + CSRF form token |
 | POST | `/api/host/bootstrap` | `host.bootstrap_host_access_token` | cookie |
 | POST | `/api/host/refresh` | `host.refresh_host_access_token` | cookie |
 | POST | `/api/looker/acquire-embed-session` | `looker.acquire_embed_session` | bearer |

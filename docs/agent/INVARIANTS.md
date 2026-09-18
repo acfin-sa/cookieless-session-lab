@@ -50,7 +50,7 @@ MUST / MUST NOT for this tree. Match `app/` if this file and comments disagree; 
 
 ## Logout
 
-- MUST implement `GET /logout` as this-browser: one cookie → one `HostSession` delete.
+- MUST implement `POST /logout` (CSRF-protected) as this-browser: one cookie → one `HostSession` delete.
 - MUST NOT implement or document in-repo logout-everywhere as existing behavior.
 - MUST NOT infer a `sub` index; `SessionStore` is keyed only by `host_session_id`.
 - Logout-everywhere (revoke every HostSession + Auth0 refresh + Looker session for `sub`) is a **product rule for a real app**, not this lab.

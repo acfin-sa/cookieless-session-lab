@@ -43,7 +43,7 @@ sequenceDiagram
     Looker-->>Host: new authentication_token, same session
     Browser->>Iframe: second iframe login URL
 
-    Browser->>Host: GET /logout
+    Browser->>Host: POST /logout (CSRF)
     Host->>Looker: DELETE /embed/cookieless_session/{session_reference_token}
     Host->>Auth0: POST /oauth/revoke (refresh)
     Host-->>Browser: clear host_session_id, redirect Auth0 /v2/logout

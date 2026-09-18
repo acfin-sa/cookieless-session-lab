@@ -95,7 +95,7 @@ Iframe `session:expired` / `session:status` with `expired=true` (`POST /api/lab/
 
 ## Logout
 
-`GET /logout` (`app/routes/auth0.py` `logout`): end Looker for **this** HostSession, `revoke_auth0_refresh` for **this** refresh token, `host_session_revoked=True`, `session_store.delete(host_session_id)`, clear cookie, Auth0 `/v2/logout`.
+`POST /logout` (`app/routes/auth0.py` `logout`, CSRF-protected): end Looker for **this** HostSession, `revoke_auth0_refresh` for **this** refresh token, `host_session_revoked=True`, `session_store.delete(host_session_id)`, clear cookie, Auth0 `/v2/logout`.
 
 This is **this-browser only**. Logout-everywhere (revoke all HostSessions for `sub`) is **not implemented**.
 
