@@ -1,50 +1,58 @@
 %% Happy-path raw postMessage flow. Not the Embed SDK client and not a failure matrix.
-sequenceDiagram
-    autonumber
-    actor Browser
-    participant Host as Host API
-    participant Auth0
-    participant Looker as Looker API
-    participant Iframe as iframe postMessage
+%% flowchart TB: renders in Cursor Mermaid preview and on /sequence.
+flowchart TB
+  subgraph layerA["Layer A — host login"]
+    A1["Browser GET /login"]
+    A2["Host GET /authorize PKCE → Auth0"]
+    A3["Auth0 redirect /callback?code="]
+    A4["Host POST /oauth/token → Auth0 tokens on server only"]
+    A5["Set-Cookie host_session_id HttpOnly"]
+    A6["Browser POST /api/host/bootstrap → host_access_token in memory"]
+    A1 --> A2 --> A3 --> A4 --> A5 --> A6
+  end
 
-    Browser->>Host: GET /login
-    Host->>Auth0: GET /authorize (PKCE)
-    Auth0->>Browser: redirect /callback?code=
-    Browser->>Host: GET /callback?code=
-    Host->>Auth0: POST /oauth/token (code + verifier)
-    Auth0-->>Host: refresh + access + id
-    Note over Host: HostSession created. Auth0 tokens stay on the server.
-    Host-->>Browser: Set-Cookie host_session_id (HttpOnly, opaque)
-    Browser->>Host: POST /api/host/bootstrap
-    Host-->>Browser: host_access_token (~200 s, memory)
+  subgraph acquire["Looker acquire"]
+    B1["Browser POST /api/looker/acquire-embed-session Bearer host_access_token"]
+    B2["Host POST /embed/cookieless_session/acquire"]
+    B3["Looker returns 4 tokens; session_reference_token stored server-side only"]
+    B4["Browser gets authentication_token, navigation_token, api_token + TTLs"]
+    B1 --> B2 --> B3 --> B4
+  end
 
-    Browser->>Host: POST /api/looker/acquire-embed-session
-    Host->>Looker: POST /embed/cookieless_session/acquire
-    Looker-->>Host: 4 tokens including session_reference_token
-    Note over Host: session_reference_token stored server-side, omitted from JSON.
-    Host-->>Browser: authentication_token, navigation_token, api_token + TTLs
+  subgraph embed["Iframe bootstrap"]
+    C1["Browser GET /login/embed?embed_authentication_token="]
+    C2["authentication_token consumed single-use ~30s"]
+    C3["Iframe postMessage session:tokens:request"]
+    C4["Browser postMessage session:tokens nav + api from acquire"]
+    C1 --> C2 --> C3 --> C4
+  end
 
-    Browser->>Iframe: GET /login/embed/...?embed_authentication_token=
-    Note over Iframe: authentication_token consumed (single use, ~30s).
-    Iframe->>Browser: postMessage session:tokens:request
-    Browser->>Iframe: postMessage session:tokens (api + nav)
+  subgraph renew["Nav/api renewal loop"]
+    D1["Iframe session:tokens:request when nav or api in last 60s"]
+    D2["Browser PUT /api/looker/generate-embed-tokens"]
+    D3["Host PUT generate_tokens with session_reference + last nav/api"]
+    D4["Looker new nav + api; session_reference TTL counts down"]
+    D5["Browser postMessage session:tokens"]
+    D1 --> D2 --> D3 --> D4 --> D5
+    D5 -.->|"repeat while session lives"| D1
+  end
 
-    loop Looker asks when either nav or api is inside its last 60s
-        Iframe->>Browser: session:tokens:request
-        Browser->>Host: PUT /api/looker/generate-embed-tokens
-        Host->>Looker: PUT /embed/cookieless_session/generate_tokens
-        Looker-->>Host: new nav + api; session_reference TTL counts down
-        Note over Host: generate rotates both siblings and leaves the session countdown in place.
-        Host-->>Browser: nav + api only
-        Browser->>Iframe: session:tokens
-    end
+  subgraph reattach["Second iframe reattach"]
+    E1["Browser POST acquire-embed-session again"]
+    E2["Host acquire with stored session_reference_token"]
+    E3["New authentication_token; same session countdown"]
+    E1 --> E2 --> E3
+  end
 
-    Browser->>Host: POST /api/looker/acquire-embed-session (second iframe)
-    Host->>Looker: acquire with stored session_reference_token
-    Looker-->>Host: new authentication_token, same session
-    Browser->>Iframe: second iframe login URL
+  subgraph logout["Logout"]
+    F1["Browser POST /logout"]
+    F2["Host DELETE cookieless session; Auth0 revoke refresh"]
+    F3["Clear cookie; Auth0 /v2/logout"]
+    F1 --> F2 --> F3
+  end
 
-    Browser->>Host: POST /logout (CSRF)
-    Host->>Looker: DELETE /embed/cookieless_session/{session_reference_token}
-    Host->>Auth0: POST /oauth/revoke (refresh)
-    Host-->>Browser: clear host_session_id, redirect Auth0 /v2/logout
+  A6 --> B1
+  B4 --> C1
+  C4 --> D1
+  D5 --> E1
+  E3 --> F1
