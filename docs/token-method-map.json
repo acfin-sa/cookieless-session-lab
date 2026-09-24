@@ -17,14 +17,6 @@
       "purpose": "Server-only Auth0 API token."
     },
     {
-      "id": "host_session_reference",
-      "name": "host_session_reference",
-      "layer": "A",
-      "badge": "Host",
-      "storage": "server",
-      "purpose": "Pedagogical host id. Not sent to Auth0 or Looker."
-    },
-    {
       "id": "host_access_token",
       "name": "host_access_token",
       "layer": "A",
@@ -83,8 +75,8 @@
       "method": "Auth0 /oauth/token (code exchange)",
       "direction": "Host API → Auth0",
       "tokens_in": ["authorization_code"],
-      "tokens_out": ["auth0_refresh", "auth0_access", "host_session_reference"],
-      "where_after": "All three stay on the HostSession. Browser never sees them. host_session_id cookie is set as the opaque handle."
+      "tokens_out": ["auth0_refresh", "auth0_access"],
+      "where_after": "Both stay on the HostSession. Browser never sees them. host_session_id cookie is set as the opaque handle."
     },
     {
       "id": "auth0_token_refresh",

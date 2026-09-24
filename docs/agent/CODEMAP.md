@@ -83,7 +83,7 @@ Auth0 token TTLs are tenant settings, not lab env.
 
 | Tab | Module | Start | Host calls |
 | --- | --- | --- | --- |
-| Embed SDK | `embed-sdk-tab.js` | `startEmbedSdkTab` | acquire + generate via SDK callbacks |
+| Embed SDK | `embed-sdk-tab.js` | `startEmbedSdkTab` | acquire + generate callbacks. `syncCookielessRemainingTtls` rewrites SDK-cached TTLs to remaining seconds. `maybeProactivelyGenerate` calls generate and pushes `session:tokens` at 180s remaining. |
 | Raw postMessage | `postmessage-tab.js` | `startPostMessageTab` | acquire; first `session:tokens` reuses acquire; later generate |
 
 Swimlane: `renderGantt` in `app/static/js/src/observatory.js`, fed by `looker_token_spans` and `looker_refresh_window_seconds` from `build_observatory_snapshot`.

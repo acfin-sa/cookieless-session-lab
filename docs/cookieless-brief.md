@@ -35,8 +35,7 @@ The browser receives an opaque `host_session_id` cookie, a short-lived
 `api_token` JWTs for the iframe.
 
 Auth0 refresh, access, and ID tokens stay on the server, as does
-`session_reference_token`. `host_session_reference` is a lab-only observatory
-id; it is not sent to Auth0 or Looker.
+`session_reference_token`.
 
 ## Why are there two short-lived Looker tokens?
 
@@ -62,6 +61,26 @@ The first `session:tokens` reply after the iframe loads reuses the acquire
 tokens. Later replies call generate. The `/lab` swimlane draws each returned
 window: a short authentication bar, stacked navigation and API generations with
 a hatch on the last 60 seconds, and one session-reference bar across generate.
+
+## What runs by itself, and what must the host write?
+
+Looker asks on its own. It sends `session:tokens:request` when the iframe
+loads, and again when either navigation or API token is inside its last 60
+seconds. It also shows "session interrupted" if the answer is missing or
+claims a longer TTL than the JWT still has.
+
+The host writes the answer. The first answer returns the tokens from acquire.
+Every later answer must call `generate_tokens` and return the new navigation
+and API tokens with the seconds they actually have left. The Embed SDK will
+not call Looker's generate API unless your callback does. The raw postMessage
+tab is the same contract without the SDK.
+
+Do not echo the original 10-minute TTL on a later ask. The SDK calls generate
+only after its gate, and Looker's ask arrives on that gate, so the reply is
+still the cached TTL. Looker shows session interrupted near 8:39 on the page
+timer while the session reference still has time, and generate never runs.
+Send the remaining TTL, or generate first. This lab generates and pushes new
+tokens once either iframe token has 180 seconds left.
 
 ## Can the session reference be refreshed?
 

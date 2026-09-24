@@ -44,6 +44,9 @@ async def record_client_event(request: Request):
     if method == IFRAME_LOGIN_EVENT_METHOD:
         session.mark_authentication_consumed()
         session.mark_iframe_started(embed_client)
+    generateFailed = (not ok) and "generate" in method.lower()
+    if generateFailed or (method in IFRAME_SESSION_EVENT_METHODS and (not ok or expired)):
+        session.record_refresh_marker("embed session interrupted")
     if method in IFRAME_SESSION_EVENT_METHODS and (not ok or expired):
         # Session-level “I can’t keep working.” Not “nav died” or “api died.”
         # Do not smash each JWT’s exp — cards follow their own clocks.

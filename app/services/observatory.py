@@ -13,7 +13,6 @@ EXPIRING_WINDOW_SECONDS = 60
 TOKEN_VALUE_FROM_SESSION = {
     "auth0_refresh": lambda session: session.auth0_refresh_token,
     "auth0_access": lambda session: session.auth0_access_token,
-    "host_session_reference": lambda session: session.host_session_reference,
     "host_access_token": lambda session: session.host_access_token,
     "session_reference_token": lambda session: session.looker_session_reference_token,
     "authentication_token": lambda session: session.looker_authentication_token,
@@ -48,7 +47,6 @@ def _token_times(session: HostSession, token_id: str) -> tuple[datetime | None, 
     issued = {
         "auth0_refresh": session.auth0_refresh_issued_at or session.created_at,
         "auth0_access": session.auth0_access_issued_at,
-        "host_session_reference": session.created_at,
         "host_access_token": session.host_access_token_issued_at,
         "session_reference_token": session.looker_session_reference_issued_at,
         "authentication_token": session.looker_authentication_issued_at,
@@ -58,7 +56,6 @@ def _token_times(session: HostSession, token_id: str) -> tuple[datetime | None, 
     expires = {
         "auth0_refresh": None,
         "auth0_access": session.auth0_access_expires_at,
-        "host_session_reference": None,
         "host_access_token": session.host_access_token_expires_at,
         "session_reference_token": session.looker_session_reference_expires_at,
         "authentication_token": session.looker_authentication_expires_at,
@@ -264,7 +261,6 @@ def _state_reason(
     if state == "revoked" and token_id in {
         "auth0_refresh",
         "auth0_access",
-        "host_session_reference",
         "host_access_token",
     }:
         return "host session revoked (logout)"
@@ -310,7 +306,7 @@ def build_observatory_snapshot(session: HostSession) -> dict[str, Any]:
         consumed = False
         revoked = False
         revoked_when_absent = False
-        if token_id in {"auth0_refresh", "auth0_access", "host_session_reference", "host_access_token"}:
+        if token_id in {"auth0_refresh", "auth0_access", "host_access_token"}:
             revoked = session.host_session_revoked
             revoked_when_absent = True
         else:
@@ -346,7 +342,7 @@ def build_observatory_snapshot(session: HostSession) -> dict[str, Any]:
             display_expires_at = session.session_reference_dropped_at
         if (
             display_expires_at is None
-            and token_id in {"auth0_refresh", "host_session_reference"}
+            and token_id == "auth0_refresh"
             and value
         ):
             planned_expires_at = _host_session_envelope_end(session)

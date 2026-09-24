@@ -374,6 +374,10 @@ a.btn { text-decoration: none; display: inline-block; }
   background: repeating-linear-gradient(90deg, #f0b429, #f0b429 2px, transparent 2px, transparent 5px);
   border: 1px solid var(--line);
 }
+.gantt-legend .swatch.state-marker-interrupted {
+  background: repeating-linear-gradient(90deg, #ef5b5b, #ef5b5b 2px, transparent 2px, transparent 5px);
+  border: 1px solid var(--line);
+}
 .gantt-legend .swatch.state-marker-acquire {
   background: repeating-linear-gradient(90deg, #6cb6ff, #6cb6ff 3px, transparent 3px, transparent 6px);
   border: 1px solid var(--line);

@@ -55,7 +55,6 @@ class HostSession:
     """
 
     host_session_id: str
-    host_session_reference: str
     created_at: datetime
     user_agent: str
     auth0_claims: dict[str, Any]

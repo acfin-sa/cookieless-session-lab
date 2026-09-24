@@ -40,12 +40,9 @@ Auth0 proves the human
 | Token | Created | Storage | Browser | End |
 | --- | --- | --- | --- | --- |
 | `host_session_id` | `callback` + `set_host_session_cookie` | cookie + `SessionStore` key | opaque cookie | logout / cookie max-age 12h |
-| `host_session_reference` | `callback` (`uuid4`) | `HostSession` | observatory metadata only | HostSession delete |
 | Auth0 refresh | `/oauth/token` code or refresh | `HostSession.auth0_refresh_token` | MUST NOT | revoke / rotation / delete |
 | Auth0 access / id | same | `HostSession` | MUST NOT | expiry / replace / delete |
 | `host_access_token` | `mint_host_access_token` | memory + HostSession for TTL display | JSON bootstrap/refresh | `exp`, `jti` rotate, `host_session_revoked` |
-
-`host_session_reference` is pedagogical. It is not sent to Auth0 or Looker.
 
 `host_access_token` is a **Host** badge on `/lab`, not Auth0 and not Looker. It
 is minted by `mint_host_access_token` and sent as `Authorization: Bearer` on
@@ -191,9 +188,31 @@ This is **this-browser only**. Logout-everywhere (revoke all HostSessions for `s
 
 ## Embed clients
 
-Same host contract, two browsers of it:
+Same host contract, two browsers of it. Human write-up: [ARCHITECTURE.md](../../ARCHITECTURE.md) sections "When Looker asks for new iframe tokens" and "The eight-minute trap".
 
-- `app/static/js/src/embed-sdk-tab.js` — `@looker/embed-sdk` `initCookieless`
-- `app/static/js/src/postmessage-tab.js` — raw `session:tokens:request` / `session:tokens`
+### Autonomous vs host-written
+
+| Actor | Runs without host code | Host must implement |
+| --- | --- | --- |
+| Looker iframe | `session:tokens:request` after load, and again when either nav or api TTL is inside its last 60s. Renders "session interrupted" when the reply is empty, late, or the stated TTL outlives the JWT. | Nothing. Do not poll Looker for the ask. |
+| Looker API | Returns TTLs. `generate_tokens` does not error on nav/api expiry. `session_reference_token_ttl == 0` means the session is dead and is not an HTTP error from Looker. | `acquire_embed_cookieless_session` and `generate_tokens_for_cookieless_session`, with the current request User-Agent. Store `session_reference_token` server-side. |
+| `@looker/embed-sdk` `initCookieless` | Delivers `session:tokens` into the iframe. First `session:tokens:request` reuses the acquire callback result. Later, calls the generate callback only when `Date.now() > cookielessSession.generateTokensTime`. | `acquireSession` and `generateTokens` callbacks. The SDK never calls Looker's generate API itself. |
+| Raw postMessage tab | None of the token replies. | Every `session:tokens:request`: first reply is the acquire payload; every later reply is generate. Validate `event.source` and the Looker origin. |
+
+`generateTokensTime` is set on the first ask to `now + (min(cached TTLs) - 120s) * 1000`. The comparison in `EmbedClientEx` is `Date.now() > generateTokensTime`. Looker's refresh ask arrives on that instant, so generate is skipped and the cached acquire TTLs are sent. Looker shows session interrupted there. With a ~39s delay from page load to the first tokens request, the page timer reads about 8:39. No `PUT /api/looker/generate-embed-tokens` is sent. `session_reference_token` still has time. The swimlane shows one nav bar and one api bar and no amber generate line.
+
+### What this lab does about that
+
+`app/static/js/src/embed-sdk-tab.js`:
+
+- `rememberCookielessIssuance` stores the acquire or generate TTLs and `Date.now()`.
+- `syncCookielessRemainingTtls` (1s) writes remaining seconds onto `embedSdk._cookielessSession`. Replying with those values tells Looker the truth.
+- When `min(api, navigation)` remaining is in `(0, 180]`, `maybeProactivelyGenerate` calls `generateTokens`, writes the result onto `_cookielessSession`, and `embedConnection.send("session:tokens", ...)` pushes it. Constant: `PROACTIVE_GENERATE_REMAINING_SECONDS`. Opening the SDK gate and waiting for the next ask is not enough: that ask is the interrupt.
+- `generateTokens` calls `PUT /api/looker/generate-embed-tokens`. Failure is `reportEvent` with `ok: false`. The SDK then sends an empty `session:tokens`, and Looker shows interrupted.
+- `app/routes/lab.py` `record_client_event` records refresh marker `embed session interrupted` on that failure and on `session:expired` / expired `session:status`. The swimlane draws it in red on the Looker lane.
+
+`app/static/js/src/postmessage-tab.js` does not use the SDK cache. The first request for an iframe window reuses acquire tokens. Every later request calls generate. A generate failure posts `session_reference_token_ttl: 0`, which expires the iframe even when the real session TTL is nonzero.
+
+Do not answer a later ask with the acquire TTL. Either call generate and return Looker's new TTLs, or send the remaining seconds of the tokens you still hold.
 
 `docs/sequence-happy-path.mmd` is the raw postMessage happy path only.

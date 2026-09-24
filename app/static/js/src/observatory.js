@@ -593,6 +593,9 @@ function syncGanttLegend() {
 }
 
 function refreshMarkerStyle(process) {
+  if (String(process).includes("interrupted")) {
+    return { stroke: "#ef5b5b", width: 2, dash: "2 2" };
+  }
   if (String(process).includes("generate_tokens")) {
     return { stroke: "#f0b429", width: 2, dash: "2 2" };
   }
@@ -609,7 +612,11 @@ function refreshMarkerBand(process, lanes) {
   const host = lanes.find((lane) => lane.id === "host");
   const chartTop = lanes[0]?.top ?? 8;
   const chartBottom = lanes[lanes.length - 1]?.bottom ?? chartTop;
-  if (String(process).includes("generate_tokens") || String(process).includes("Looker acquire")) {
+  if (
+    String(process).includes("interrupted") ||
+    String(process).includes("generate_tokens") ||
+    String(process).includes("Looker acquire")
+  ) {
     if (looker) {
       return { y1: looker.top, y2: iframe ? iframe.bottom : looker.bottom };
     }

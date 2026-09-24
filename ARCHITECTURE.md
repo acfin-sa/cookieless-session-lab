@@ -113,22 +113,52 @@ the observatory keeps it out of that window's yellow state.
 
 ### When Looker asks for new iframe tokens
 
-After the iframe loads, it sends `session:tokens:request`. The first reply
-reuses the navigation and API tokens from acquire. The Embed SDK does that
-inside `initCookieless`. The raw postMessage tab does the same.
+Looker, inside the iframe, decides when to ask. The host does not poll Looker
+for this. After the iframe loads it sends `session:tokens:request`. It sends
+that again when either `navigation_token` or `api_token` is inside its last 60
+seconds. The lab paints that window as the hatch
+(`EXPIRING_WINDOW_SECONDS` in `app/services/observatory.py`).
 
-Looker sends that request again when either sibling is inside its last 60
-seconds. The lab constant is `EXPIRING_WINDOW_SECONDS` in
-`app/services/observatory.py`. The snapshot field
-`looker_refresh_window_seconds` is what the page uses for the hatch, the
-expiring state, and the overlay. `generate_tokens` then rotates both siblings,
-including the one that still had more than 60 seconds left. Freeze answers
-that ask with the same JWTs and does not call Looker, so the current windows
-keep running until their own `exp`.
+What the host must do on each ask is not automatic:
+
+| Step | Who runs it |
+| --- | --- |
+| Notice that nav or api is near expiry, and send `session:tokens:request` | Looker, on its own |
+| First reply: hand back the navigation and API tokens from acquire, with the TTLs Looker just returned | Host code. The Embed SDK does this inside `initCookieless` if you passed an acquire callback. The raw postMessage tab does it explicitly. |
+| Later reply: call `generate_tokens` and return the new navigation and API tokens, plus the **remaining** `session_reference_token_ttl` | Host code. You write this. Neither Looker nor the SDK calls Looker's generate API for you. |
+| Keep `session_reference_token` on the server and send it only to Looker's generate API | Host code |
+| Show "session interrupted" if the reply is missing, late, or carries a stale TTL | Looker, on its own |
+
+`generate_tokens` rotates both siblings, including the one that still had more
+than 60 seconds left. It does not extend the session. Freeze answers the ask
+with the same JWTs and does not call Looker, so those windows run out on their
+own `exp`.
 
 A returned `session_reference_token_ttl` of 0 means the embed session is dead.
 The lab turns that into HTTP 409 `SESSION_DEAD`. The iframe tokens may still
 show time on their own clocks. Renewal still requires a new acquire.
+
+### The eight-minute trap
+
+Navigation and API tokens usually last about 10 minutes. Looker's ask is the
+last 60 seconds of that, around minute 9. A session of 12 minutes still has
+time left. The embed can still die near minute 8.
+
+`@looker/embed-sdk` remembers the TTL from acquire (about 600 seconds) and
+sets `generateTokensTime` to 120 seconds before that number. It calls
+`generate_tokens` only when the clock is already past that instant. Looker's
+next ask lands on the instant itself, so the SDK answers with the cached
+10-minute TTL and Looker shows session interrupted. No
+`generate_tokens` ran. On the page timer that instant is about 8:39 when the
+iframe's first token request was about 39 seconds after load. The session
+reference still has time. The swimlane shows one navigation bar, one API bar,
+and no amber line.
+
+The TTL you send must be the seconds still left, unless this reply is the
+fresh result of generate. This lab rewrites the SDK's cached TTLs to remaining
+time and, with 180 seconds left, calls generate and pushes the new tokens into
+the iframe before that ask. A failed generate or an interrupted iframe draws
+a red line on the Looker lane.
 
 ## Acquire, renew, and login are different operations
 

@@ -84,9 +84,13 @@ Lifecycle and trust-boundary detail: [CONTEXT.md](CONTEXT.md). File/route map: [
 - MUST keep Embed SDK and raw postMessage as two clients of the same host contract.
 - MUST NOT send `session_reference_token` on `session:tokens`.
 - MUST validate raw postMessage `event.source` and Looker origin in `postmessage-tab.js`.
+- Looker sends `session:tokens:request` on its own (load, then either nav or api inside its last 60s). The host does not poll for that ask.
+- MUST implement acquire and generate callbacks. The Embed SDK does not call Looker's generate API. The raw tab must call generate on every ask after the first for that iframe.
+- MUST NOT answer a later `session:tokens:request` with the original acquire TTLs. The SDK caches those full values and withholds `generateTokens` until `generateTokensTime` (original TTL minus 120s). Echoing them makes Looker wait ~10 more minutes; the JWTs die near minute 8 with no generate call, while `session_reference_token` remains. Send remaining seconds, or generate first.
+- This lab's correction is `syncCookielessRemainingTtls` and `maybeProactivelyGenerate` (`PROACTIVE_GENERATE_REMAINING_SECONDS` = 180) in `embed-sdk-tab.js`. It must call generate and push `session:tokens` before Looker's ask. Do not replace it with only setting `generateTokensTime` to the past: the ask arrives on that gate (`Date.now() > generateTokensTime` is still false) and Looker interrupts near page time 8:39.
+- A failed generate or iframe `session:expired` MUST be visible. `record_client_event` writes refresh marker `embed session interrupted`.
 
 ## Lab vs production
 
 - MUST treat `SessionStore` as process-local (restart wipes both layers).
 - MUST NOT commit `.env` or real token values.
-- MUST keep `host_session_reference` pedagogical (not an Auth0/Looker credential).

@@ -13,7 +13,7 @@ sequenceDiagram
     Browser->>Host: GET /callback?code=
     Host->>Auth0: POST /oauth/token (code + verifier)
     Auth0-->>Host: refresh + access + id
-    Note over Host: HostSession created. host_session_reference stays on the server.
+    Note over Host: HostSession created. Auth0 tokens stay on the server.
     Host-->>Browser: Set-Cookie host_session_id (HttpOnly, opaque)
     Browser->>Host: POST /api/host/bootstrap
     Host-->>Browser: host_access_token (~200 s, memory)

@@ -81,15 +81,14 @@ async def callback(request: Request):
     except OAuthError:
         return RedirectResponse(url=public_url("/lab"), status_code=302)
 
-    # TOKEN: auth0_refresh, auth0_access, host_session_reference
+    # TOKEN: auth0_refresh, auth0_access
     # CREATED BY: Auth0 /oauth/token (code exchange)
-    # CONSUMED BY: refresh/revoke (Auth0 tokens); host_session_reference stays server-only
+    # CONSUMED BY: refresh/revoke
     # LIVES AT: HostSession in process memory. Never in the browser, never in the cookie value.
-    # TTL: access from JWT exp; refresh until revoke; host_session_reference until logout
+    # TTL: access from JWT exp; refresh until revoke
     # WHY: long-lived high-privilege handles belong on the server. The cookie is only an opaque index.
     session = HostSession(
         host_session_id=uuid4().hex,
-        host_session_reference=uuid4().hex,
         created_at=utc_now(),
         user_agent=request_user_agent(request),
         auth0_claims={},
@@ -104,7 +103,7 @@ async def callback(request: Request):
         actor="Auth0",
         summary="code exchanged; Auth0 tokens stored on HostSession; host_session_id cookie will be set",
         tokens_in=["authorization_code"],
-        tokens_out=["auth0_refresh", "auth0_access", "host_session_reference"],
+        tokens_out=["auth0_refresh", "auth0_access"],
         ok=True,
         status_code=200,
     )
