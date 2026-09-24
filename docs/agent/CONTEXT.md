@@ -188,7 +188,7 @@ This is **this-browser only**. Logout-everywhere (revoke all HostSessions for `s
 
 ## Embed clients
 
-Same host contract, two browsers of it. Human write-up: [ARCHITECTURE.md](../../ARCHITECTURE.md) sections "When Looker asks for new iframe tokens" and "The eight-minute trap".
+Same host contract, two browsers of it. Human write-up: [ARCHITECTURE.md](../../ARCHITECTURE.md) sections "When Looker asks for new iframe tokens" and "The Embed SDK generate gate".
 
 ### Autonomous vs host-written
 
@@ -199,7 +199,15 @@ Same host contract, two browsers of it. Human write-up: [ARCHITECTURE.md](../../
 | `@looker/embed-sdk` `initCookieless` | Delivers `session:tokens` into the iframe. First `session:tokens:request` reuses the acquire callback result. Later, calls the generate callback only when `Date.now() > cookielessSession.generateTokensTime`. | `acquireSession` and `generateTokens` callbacks. The SDK never calls Looker's generate API itself. |
 | Raw postMessage tab | None of the token replies. | Every `session:tokens:request`: first reply is the acquire payload; every later reply is generate. Validate `event.source` and the Looker origin. |
 
-`generateTokensTime` is set on the first ask to `now + (min(cached TTLs) - 120s) * 1000`. The comparison in `EmbedClientEx` is `Date.now() > generateTokensTime`. Looker's refresh ask arrives on that instant, so generate is skipped and the cached acquire TTLs are sent. Looker shows session interrupted there. With a ~39s delay from page load to the first tokens request, the page timer reads about 8:39. No `PUT /api/looker/generate-embed-tokens` is sent. `session_reference_token` still has time. The swimlane shows one nav bar and one api bar and no amber generate line.
+### Embed SDK generate gate
+
+On the first `session:tokens:request`, `EmbedClientEx` caches the acquire TTLs on `_cookielessSession` (`cookielessApiTokenTtl`, `cookielessNavigationTokenTtl`, `cookielessSessionReferenceTokenTtl`) and sets `generateTokensTime` to `now + (min(cached TTLs) - 120s) * 1000`. Those cached numbers are the original acquire TTLs, not the seconds remaining.
+
+`generateTokens` runs only when `Date.now() > generateTokensTime`. Equality does not pass. Looker's refresh ask arrives on that timestamp, so the callback is skipped and `session:tokens` is sent with the cached acquire TTLs (~600). Looker shows session interrupted because that TTL outlives the JWTs. No `PUT /api/looker/generate-embed-tokens`. `session_reference_token` is unchanged. The swimlane stays one nav bar, one api bar, and no amber generate line.
+
+Page timer reading: first tokens request + 8:00. A first request ~39s after load reads **8:39**. At that moment the nav/api JWTs still have about 120s.
+
+Setting `generateTokensTime` to the past and waiting for the next ask does not help. That ask is the interrupt. Generate and push `session:tokens` before the gate.
 
 ### What this lab does about that
 

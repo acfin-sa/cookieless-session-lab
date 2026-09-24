@@ -138,27 +138,35 @@ A returned `session_reference_token_ttl` of 0 means the embed session is dead.
 The lab turns that into HTTP 409 `SESSION_DEAD`. The iframe tokens may still
 show time on their own clocks. Renewal still requires a new acquire.
 
-### The eight-minute trap
+### The Embed SDK generate gate
 
-Navigation and API tokens usually last about 10 minutes. Looker's ask is the
-last 60 seconds of that, around minute 9. A session of 12 minutes still has
-time left. The embed can still die near minute 8.
+`@looker/embed-sdk` does not call your `generateTokens` callback on every
+`session:tokens:request`. On the first ask it caches the acquire TTLs (usually
+about 600 seconds for navigation and API) and sets `generateTokensTime` to
+120 seconds before that cached number:
 
-`@looker/embed-sdk` remembers the TTL from acquire (about 600 seconds) and
-sets `generateTokensTime` to 120 seconds before that number. It calls
-`generate_tokens` only when the clock is already past that instant. Looker's
-next ask lands on the instant itself, so the SDK answers with the cached
-10-minute TTL and Looker shows session interrupted. No
-`generate_tokens` ran. On the page timer that instant is about 8:39 when the
-iframe's first token request was about 39 seconds after load. The session
-reference still has time. The swimlane shows one navigation bar, one API bar,
-and no amber line.
+`now + (minimum of the cached TTLs − 120 seconds)`.
 
-The TTL you send must be the seconds still left, unless this reply is the
-fresh result of generate. This lab rewrites the SDK's cached TTLs to remaining
-time and, with 180 seconds left, calls generate and pushes the new tokens into
-the iframe before that ask. A failed generate or an interrupted iframe draws
-a red line on the Looker lane.
+Later asks call `generateTokens` only when `Date.now()` is **already past**
+that timestamp. The comparison in `EmbedClientEx` is `>`, so an ask that
+arrives on the gate does not generate. The SDK answers with the cached acquire
+TTLs, about 10 minutes, not the seconds those JWTs still have.
+
+Looker's refresh ask lands on that same instant. The reply claims a longer
+life than the JWTs have left, so Looker shows session interrupted. The host
+never called `generate_tokens`. The session reference is still counting down.
+The swimlane stays one navigation bar, one API bar, and no amber line.
+
+Read it on the page timer as **first token request + 8:00**. When that first
+request is about 39 seconds after load, the timer reads **8:39**. The
+navigation and API JWTs still have about two minutes at that moment.
+
+A later reply must carry the seconds still left, unless it is the fresh result
+of generate. Waiting for the ask and only then opening the gate is too late:
+that ask is the interrupt. This lab rewrites the cached TTLs to remaining time
+every second and, with 180 seconds left, calls generate and pushes the new
+tokens into the iframe. A failed generate or an interrupted iframe draws a red
+line on the Looker lane.
 
 ## Acquire, renew, and login are different operations
 

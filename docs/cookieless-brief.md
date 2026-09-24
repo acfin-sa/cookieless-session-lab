@@ -75,12 +75,25 @@ and API tokens with the seconds they actually have left. The Embed SDK will
 not call Looker's generate API unless your callback does. The raw postMessage
 tab is the same contract without the SDK.
 
-Do not echo the original 10-minute TTL on a later ask. The SDK calls generate
-only after its gate, and Looker's ask arrives on that gate, so the reply is
-still the cached TTL. Looker shows session interrupted near 8:39 on the page
-timer while the session reference still has time, and generate never runs.
-Send the remaining TTL, or generate first. This lab generates and pushes new
-tokens once either iframe token has 180 seconds left.
+Do not echo the original 10-minute TTL on a later ask. The Embed SDK will
+skip generate when Looker's ask arrives on its gate, described next.
+
+## What is the Embed SDK generate gate?
+
+`@looker/embed-sdk` caches the acquire TTLs and sets `generateTokensTime` to
+120 seconds before that cached number. It calls your generate callback only
+when the clock is already past that time. An ask that lands on the gate is
+answered with the original 10-minute TTL.
+
+That reply is the session-interrupted error. Generate never ran. On the page
+timer the gate reads as the first token request plus 8:00, about **8:39** when
+the iframe first asked roughly 39 seconds after load. The session reference
+still has time. The swimlane shows no new navigation or API bar and no amber
+line.
+
+Send the seconds still left, or generate and push new tokens before the gate.
+This lab does both: it rewrites the cached TTLs every second, and with 180
+seconds left it calls generate and pushes `session:tokens` into the iframe.
 
 ## Can the session reference be refreshed?
 
