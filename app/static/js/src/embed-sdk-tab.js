@@ -10,14 +10,8 @@ let cookielessTtlTimer = null;
 let generateInFlight = null;
 let lastProactiveGenerateAtMs = 0;
 
-// Looker asks again from the TTL it was last told, on the same instant the
-// Embed SDK opens generateTokensTime (that TTL minus 120s). The SDK generates
-// only when Date.now() is already past that instant, so the ask is answered
-// with the cached acquire TTL and Looker shows session interrupted. Page time
-// 8:39 is that gate when the first tokens request landed ~39s after load.
-// Generate and push while 180s remain, before that cliff.
 const PROACTIVE_GENERATE_REMAINING_SECONDS = 180;
-const PROACTIVE_GENERATE_RETRY_WAIT_MS = 15000;
+const PROACTIVE_GENERATE_RETRY_WAIT_MS = 10000;
 
 function numericTtl(value) {
   const ttl = Number(value);
@@ -50,13 +44,15 @@ function applyTokensToCookielessSession(tokens) {
   const apiTtl = numericTtl(tokens.api_token_ttl);
   const navigationTtl = numericTtl(tokens.navigation_token_ttl);
   const sessionTtl = numericTtl(tokens.session_reference_token_ttl);
+
   session.cookielessApiToken = tokens.api_token;
   session.cookielessApiTokenTtl = apiTtl;
   session.cookielessNavigationToken = tokens.navigation_token;
   session.cookielessNavigationTokenTtl = navigationTtl;
   session.cookielessSessionReferenceTokenTtl = sessionTtl;
+
   const soonestTtl = Math.min(sessionTtl, apiTtl, navigationTtl);
-  const leadSeconds = soonestTtl > 120 ? soonestTtl - 120 : 0;
+  const leadSeconds = soonestTtl > 150 ? soonestTtl - 150 : 0;
   session.generateTokensTime = Date.now() + leadSeconds * 1000;
 }
 
@@ -73,19 +69,19 @@ function pushSessionTokensToIframe(tokens) {
   });
 }
 
-function maybeProactivelyGenerate(soonestIframeTtl) {
+function proactivelyGenerateTokens(soonestIframeTtl) {
   if (soonestIframeTtl <= 0 || soonestIframeTtl > PROACTIVE_GENERATE_REMAINING_SECONDS) {
-    return;
+    return; // do nothing if tokens are dead or more than PROACTIVE_GENERATE_REMAINING_SECONDS remain
   }
   if (Date.now() - lastProactiveGenerateAtMs < PROACTIVE_GENERATE_RETRY_WAIT_MS) {
-    return;
+    return; // limits to 1 attempt per PROACTIVE_GENERATE_RETRY_WAIT_MS
   }
   lastProactiveGenerateAtMs = Date.now();
   const session = embedSdk?._cookielessSession;
   if (session) {
     session.generateTokensTime = Date.now() - 1;
   }
-  generateTokens()
+  generateTokens() // PUT /api/looker/generate-embed-tokens
     .then((tokens) => {
       applyTokensToCookielessSession(tokens);
       pushSessionTokensToIframe(tokens);
@@ -100,6 +96,8 @@ function remainingCookielessTtl(issuedTtl) {
   return Math.max(0, Math.round(issuedTtl - elapsedSeconds));
 }
 
+// syncCookielessRemainingTtls runs every second:
+// computes remaiing TTL and calls proactivelyGenerateTokens if needed
 function syncCookielessRemainingTtls() {
   const session = embedSdk?._cookielessSession;
   if (!session || !cookielessIssuedTtls || !cookielessIssuedAtMs) {
@@ -111,7 +109,7 @@ function syncCookielessRemainingTtls() {
   session.cookielessApiTokenTtl = apiTtl;
   session.cookielessNavigationTokenTtl = navigationTtl;
   session.cookielessSessionReferenceTokenTtl = sessionTtl;
-  maybeProactivelyGenerate(Math.min(apiTtl, navigationTtl));
+  proactivelyGenerateTokens(Math.min(apiTtl, navigationTtl));
 }
 
 function startCookielessTtlTimer() {

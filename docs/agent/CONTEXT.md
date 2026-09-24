@@ -215,7 +215,7 @@ Setting `generateTokensTime` to the past and waiting for the next ask does not h
 
 - `rememberCookielessIssuance` stores the acquire or generate TTLs and `Date.now()`.
 - `syncCookielessRemainingTtls` (1s) writes remaining seconds onto `embedSdk._cookielessSession`. Replying with those values tells Looker the truth.
-- When `min(api, navigation)` remaining is in `(0, 180]`, `maybeProactivelyGenerate` calls `generateTokens`, writes the result onto `_cookielessSession`, and `embedConnection.send("session:tokens", ...)` pushes it. Constant: `PROACTIVE_GENERATE_REMAINING_SECONDS`. Opening the SDK gate and waiting for the next ask is not enough: that ask is the interrupt.
+- When `min(api, navigation)` remaining is in `(0, 180]`, `proactivelyGenerateTokens` calls `generateTokens`, writes the result onto `_cookielessSession`, and `embedConnection.send("session:tokens", ...)` pushes it. Constant: `PROACTIVE_GENERATE_REMAINING_SECONDS`. Opening the SDK gate and waiting for the next ask is not enough: that ask is the interrupt.
 - `generateTokens` calls `PUT /api/looker/generate-embed-tokens`. Failure is `reportEvent` with `ok: false`. The SDK then sends an empty `session:tokens`, and Looker shows interrupted.
 - `app/routes/lab.py` `record_client_event` records refresh marker `embed session interrupted` on that failure and on `session:expired` / expired `session:status`. The swimlane draws it in red on the Looker lane.
 
