@@ -23,11 +23,11 @@ Invariants: [INVARIANTS.md](INVARIANTS.md).
 | `app/services/looker_client.py` | `acquire_embed_session`, `generate_embed_tokens`, `end_embed_session`, `drop_session_reference` |
 | `app/services/observatory.py` | `build_observatory_snapshot`, `load_method_map` |
 | `app/services/events.py` | `log_event` (redacts summaries to 500 chars) |
-| `app/static/js/src/host-client.js` | Memory host JWT; `fetchWithHostAccessToken`; bootstrap/refresh |
+| `app/static/js/src/host-client.js` | Memory host JWT; `scheduleHostRefresh` (one-shot, reschedule on success); `fetchWithHostAccessToken` (401 → one refresh retry); bootstrap/refresh |
 | `app/static/js/src/embed-sdk-tab.js` | Embed SDK tab |
 | `app/static/js/src/postmessage-tab.js` | Raw postMessage tab |
 | `app/static/js/src/lab.js` | Tab switch, controls, overlays |
-| `app/static/js/src/observatory.js` | Poll `/api/lab/snapshot` |
+| `app/static/js/src/observatory.js` | Poll `/api/lab/snapshot`; `#btn-copy-event-log` copies the snapshot event list |
 | `docs/token-method-map.json` | Method catalog + token `badge` (Auth0 / Host / Looker) for constellation |
 | `docs/sequence-happy-path.mmd` | Happy-path postMessage sequence |
 | `scripts/dev.mjs` | venv check, esbuild, uvicorn `--reload` localhost:3000 |
@@ -67,7 +67,7 @@ Relevant fields: Auth0 tokens + claims; host JWT + `jti`; Looker four tokens + T
 
 | Symbol | Where | Notes |
 | --- | --- | --- |
-| `LOOKER_EMBED_SESSION_LENGTH` | `.env` / `config.py` default 720 | Looker `session_length` at acquire. The other three Looker TTLs come back from Looker (~30s auth, ~10min nav, ~10min api). |
+| `LOOKER_EMBED_SESSION_LENGTH` | `.env` overrides `os.getenv` fallback in `config.py` (example and fallback 720) | Sent as `session_length` on a new acquire only. Reattach and generate do not apply it. Also the cap on returned nav/api TTLs (Looker otherwise ~10 min; no request field). Swimlane uses returned TTLs. Restart, then acquire with no stored reference, to change a live bar. |
 | `EXPIRING_WINDOW_SECONDS` | `app/services/observatory.py` **60** | Nav/api ask window. Snapshot `looker_refresh_window_seconds`. Swimlane hatch and expiring state read it. Not used for `authentication_token`. |
 | `LOOKER_EMBED_FILTER_PERIODO` / `GESTOR` | `.env` / `config.py` | Embed SDK cold-start `withFilters`; via `page_config.coldStartDashboardFilters` |
 | `HOST_ACCESS_TOKEN_TTL_SECONDS` | `app/config.py` **hardcoded 200** | not `.env` |

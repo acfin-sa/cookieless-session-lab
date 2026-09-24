@@ -12,8 +12,11 @@ Lifecycle and trust-boundary detail: [CONTEXT.md](CONTEXT.md). File/route map: [
 - MUST NOT return Auth0 refresh, access, or ID tokens to the browser.
 - MUST keep `authentication_token` single-use on the embed login URL (`/login/embed`); mark consumed via `POST /api/lab/events` method `iframe navigation to embed login URL`.
 - MUST treat `navigation_token` and `api_token` as sibling JWTs: independent TTL/`exp`; `generate_tokens` rotates both; they are not Layer B identity.
+- MUST NOT send a navigation or API TTL on acquire or generate. Looker returns those TTLs. They cannot outlive `session_length`; a shorter `LOOKER_EMBED_SESSION_LENGTH` is the only host-side cap.
 - MUST treat `authentication_token` as single-use and outside the nav/api ask window. Its usual Looker TTL is ~30s. `generate_tokens` leaves it unchanged.
 - MUST treat `session_reference_token` expiry as the acquire countdown. `generate_tokens` stores Looker's remaining TTL and keeps `looker_session_reference_issued_at`. Reattach keeps that issued-at unless the new absolute expiry is more than 15 seconds later (`note_session_reference_window`).
+- MUST NOT extend `session_reference_token` lifetime on generate or reattach. A new countdown is acquire with no stored reference.
+- MUST read live `session_length` from `LOOKER_EMBED_SESSION_LENGTH` after `load_dotenv`. A value in `.env` overrides the `os.getenv` fallback. The swimlane follows Looker's returned TTL.
 - MUST treat `host_session_id` as opaque lookup only.
 - MUST treat `host_access_token` as the host BFF bearer (Layer A). It gates
   `/api/looker/*` and `/api/lab/*`; it is not Looker's `api_token` and not Auth0
@@ -27,6 +30,10 @@ Lifecycle and trust-boundary detail: [CONTEXT.md](CONTEXT.md). File/route map: [
 - MUST require cookie session for `POST /api/host/bootstrap` and `POST /api/host/refresh`.
 - MUST require bearer (`require_bearer_session`) for all `/api/looker/*` and `/api/lab/*`.
 - MUST reject stale host JWT `jti` after refresh (401).
+- Host JWT renewal in the browser is success-chained: `storeHostAccessToken` calls `scheduleHostRefresh` (one timeout). A failed `POST /api/host/refresh` does not schedule the next one. `fetchWithHostAccessToken` retries a 401 once via refresh. Auth0 refresh failure on that route returns 401 and does not mint.
+- MUST NOT treat an embed `session:expired` while nav/api and session-reference TTLs remain as proof those Looker clocks expired. Generate can fail because the host bearer could not be refreshed.
+- MUST NOT treat host-JWT expiry as an immediate UI teardown. The page changes only when a bearer call fails and refresh fails. See CONTEXT "Host JWT refresh chain".
+- MUST NOT treat the browser clock as the authority for host JWT or Looker expiry. `Date.now()` drives display and `scheduleHostRefresh` only.
 - MUST NOT call Looker acquire/generate/end without a valid Layer A session.
 
 ## Looker generate identity

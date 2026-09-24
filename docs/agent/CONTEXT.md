@@ -68,7 +68,9 @@ Looker returns the TTLs. The lab sets only `session_length` (`LOOKER_EMBED_SESSI
 
 `navigation_token` and `api_token` are siblings with independent `exp`. They are not aliases and are not Layer B identity. Acquire and generate usually mint them together. Draw each returned TTL. `generate_tokens` rotates both when Looker asks.
 
-`session_reference_token` countdown starts at acquire. `generate_tokens` stores the returned remaining `session_reference_token_ttl` and keeps `looker_session_reference_issued_at`. A new reference string, if Looker returns one, replaces the secret and leaves the countdown in place. Reattach (acquire with the stored reference) ignores `session_length` and keeps that issued-at when the new absolute expiry is within 15 seconds of the previous one. A later expiry beyond that starts a new span (`HostSession.note_session_reference_window`).
+`session_reference_token` countdown starts at acquire. `generate_tokens` stores the returned remaining `session_reference_token_ttl` and keeps `looker_session_reference_issued_at`. A new reference string, if Looker returns one, replaces the secret and leaves the countdown in place. Reattach (acquire with the stored reference) ignores `session_length` and keeps that issued-at when the new absolute expiry is within 15 seconds of the previous one. A later expiry beyond that starts a new span (`HostSession.note_session_reference_window`). There is no refresh that extends this TTL. A new countdown requires acquire with no stored reference (`end_embed_session` or a dropped/missing reference, then acquire).
+
+`LOOKER_EMBED_SESSION_LENGTH` is `os.getenv` after `load_dotenv(ROOT_DIR / ".env")` in `app/config.py`. A set `.env` value wins over the Python fallback. The swimlane and cards use Looker's `session_reference_token_ttl`, not that integer. Changing `.env` or the fallback requires a process restart; an already acquired session keeps its returned TTL. `/architecture` prints the loaded integer (`views.architecture`).
 
 `authentication_token` is consumed by iframe navigation to `/login/embed`. `generate_tokens` leaves it unchanged. Its TTL is shorter than the nav/api ask window, so it stays out of the expiring state (`build_observatory_snapshot` and `currentTokenState`).
 
@@ -132,13 +134,45 @@ MUST NOT document “always the original login UA.”
 | Path | Functions | Effect |
 | --- | --- | --- |
 | Host bootstrap | `POST /api/host/bootstrap` → `bootstrap_host_access_token` | cookie; mint if missing or &lt;30s to expiry |
-| Host refresh | `POST /api/host/refresh` → `refresh_host_access_token` | cookie; optional `refresh_auth0_tokens`; always mint host JWT |
+| Host refresh | `POST /api/host/refresh` → `refresh_host_access_token` | cookie. If `auth0_refresh_token` is set, `refresh_auth0_tokens` runs first; `Auth0RefreshError` returns HTTP 401 and does not mint. Otherwise `mint_host_access_token`. |
 | Looker acquire | `POST /api/looker/acquire-embed-session` → `looker_client.acquire_embed_session` | `embed_domain=APP_BASE_URL`; create or reattach via stored reference; new auth token |
 | Looker generate | `PUT /api/looker/generate-embed-tokens` → `looker_client.generate_embed_tokens` | identity from HostSession, not body; if Looker returns a replacement `session_reference_token`, the server stores it |
 | Freeze | `HostSession.freeze_token_refresh` | generate returns 200 + `frozen: true`, no Looker rotate |
 | Dead session | `session_reference_token_ttl == 0` | `LookerSessionDead` → HTTP 409 `code: SESSION_DEAD` |
 
-Acquire is not generate. Auth0 code exchange is not host refresh.
+Acquire is not generate. Auth0 code exchange is not host refresh. Generate does not extend `session_reference_token`.
+
+### Host JWT refresh chain
+
+`app/static/js/src/host-client.js`:
+
+- `bootstrapHostSession` → `POST /api/host/bootstrap` (cookie only) → `storeHostAccessToken`.
+- `storeHostAccessToken` sets memory JWT + `hostAccessExpiresAt` from `expires_at` (else JWT `exp`) and calls `scheduleHostRefresh`.
+- `scheduleHostRefresh` is one `setTimeout`, not an interval. Wait is `max(5000, remainingMs - leadMs)`. The lead is the literal subtracted in that function. On fire it calls `refreshHostAccessToken`. Success stores the new JWT and therefore schedules the next timeout. Failure is `console.warn` only; it does not schedule another attempt.
+- `fetchWithHostAccessToken`: on HTTP 401 (except bootstrap/refresh themselves), call `refreshHostAccessToken` once and retry the original request with the new bearer. A second 401 throws.
+- `refreshHostAccessToken` coalesces with `refreshInFlight`. It does not send the bearer; the cookie selects the HostSession.
+
+Embed acquire and generate go through `fetchWithHostAccessToken`. If the chained refresh has failed and the 401 retry also fails, `generateTokens` / the postMessage generate path throw while nav/api `exp` and `session_reference_token_ttl` can still be in the future. The iframe then emits `session:expired` or shows its interrupted state. That is not evidence that a Looker token expired. `authentication_token` is already consumed at `/login/embed` and is not an input to generate.
+
+Expiry of the host JWT alone does not change the page. Effects below require the JWT to be expired **and** `POST /api/host/refresh` to fail:
+
+| Surface | Behavior |
+| --- | --- |
+| Embed SDK | `generateTokens` throws on the next `session:tokens:request` (either sibling inside `EXPIRING_WINDOW_SECONDS`). Looker shows its interrupted state. The iframe keeps working until that ask. |
+| Raw postMessage | `postmessage-tab.js` posts `session:tokens` with `session_reference_token_ttl: 0` so the iframe expires. |
+| Observatory | `poll` catches and `console.warn`s. Cards, gantt, and event log stay on the last snapshot. The 1s `renderCards` / `renderGantt` interval still moves those old clocks. |
+| Controls | Freeze, UA mismatch, drop reference, and End Looker call `showLabError`. Toggles revert. |
+| Browser-originated events | `reportEvent` `console.warn`s; the row is not stored. |
+| Login | No redirect. The host cookie can still be valid. |
+| Copy event log | `#btn-copy-event-log` copies the in-memory snapshot; it does not call the API. |
+
+### Whose clock expires a token
+
+`verify_host_access_token` (`app/services/host_tokens.py`) and Looker enforce absolute `exp` / returned TTLs. Browser `Date.now()` is used for countdowns, the swimlane now-line, and `scheduleHostRefresh` remaining time. Setting the browser clock forward makes the UI look expired and can fire host refresh early. It does not make PyJWT reject the host JWT, and it does not make Looker expire nav, api, or session reference. There is no lab time-scale control. Chrome virtual time (`Emulation.setVirtualTimePolicy`) does not move this Python process or Looker, and the Looker iframe may not share it.
+
+### Shortening navigation and API TTLs
+
+`EmbedCookielessSessionAcquire` and `EmbedCookielessSessionGenerateTokens` have no navigation or API TTL fields (`looker_sdk` `api40/models.py`). Response fields `navigation_token_ttl` and `api_token_ttl` are Looker's. Usual value is ~10 minutes when `session_length` is longer than that. Those tokens cannot outlive the session, so `LOOKER_EMBED_SESSION_LENGTH` below ~600 seconds caps the TTLs Looker returns on acquire and on later generate (remaining session reference). Apply it the same way as any session-length change: restart, end Layer B, acquire with no stored reference.
 
 ## `session:expired`
 

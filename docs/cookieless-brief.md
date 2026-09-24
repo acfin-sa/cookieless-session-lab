@@ -63,6 +63,48 @@ tokens. Later replies call generate. The `/lab` swimlane draws each returned
 window: a short authentication bar, stacked navigation and API generations with
 a hatch on the last 60 seconds, and one session-reference bar across generate.
 
+## Can the session reference be refreshed?
+
+No. Generate may replace the secret string. It does not extend the lifetime.
+Reattach ignores a new `session_length`. When the countdown hits zero, acquire
+a new Looker session.
+
+The length of a new session is `LOOKER_EMBED_SESSION_LENGTH` in `.env`. That
+file overrides the fallback in `app/config.py`. Restart, end the current Looker
+session, and acquire again before the swimlane can show the new length. The bar
+is the TTL Looker returned.
+
+## Can navigation and API lifetimes be shortened?
+
+Not on their own. Acquire and generate have no field for those TTLs. Looker
+returns about 10 minutes when the session is longer than that. Those tokens
+cannot outlive the session, so a `LOOKER_EMBED_SESSION_LENGTH` below 10 minutes
+caps them. Restart, end Looker, and acquire again. Later generate calls stay
+inside the time still left on the session reference.
+
+## Can the browser clock be sped up to simulate expiry?
+
+No. Expiry is an absolute time checked by the host and by Looker. The page uses
+its clock only to draw countdowns and to decide when to refresh the host JWT.
+Moving that clock makes the swimlane look expired and can fire host refresh
+early. It does not make the server reject the host JWT, and it does not make
+Looker expire navigation, API, or session-reference tokens. Shorten the
+lifetimes above instead.
+
+## Why can the embed die while Looker tokens are still valid?
+
+`host_access_token` is the browser's pass to the host API. The page refreshes
+it on a timer, and each success schedules the next refresh. A failed refresh
+does not. Nothing on the page breaks at the moment that JWT expires. The break
+shows up on the next call that needs it, and only if refresh fails too.
+
+The dashboard keeps running on the navigation and API tokens it already holds.
+The next time Looker asks for new ones, generate fails: the Embed SDK surfaces
+Looker's interrupted state, and the raw postMessage tab tells the iframe the
+session TTL is 0. The swimlane, cards, and event log stay on the last snapshot.
+Freeze, User-Agent mismatch, Drop session reference, and End Looker show an
+error banner. The page does not send you back to login.
+
 ## Does renew mean login again?
 
 No. Login proves identity; renewal rotates short-lived credentials while the

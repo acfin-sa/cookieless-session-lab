@@ -44,7 +44,11 @@ the teaching became wrong. Do not re-copy the full inventory into those files.
 - Strip of `session_reference_token` in `app/routes/looker.py`.
 - Generate identity from `HostSession`, not iframe body.
 - Independent nav/api JWT clocks vs iframe `session:expired`.
-- Looker cookieless lifetimes and the 60s nav/api ask (`EXPIRING_WINDOW_SECONDS`). `authentication_token` stays outside that window. `generate_tokens` leaves the session-reference countdown in place.
+- Looker cookieless lifetimes and the 60s nav/api ask (`EXPIRING_WINDOW_SECONDS`). `authentication_token` stays outside that window. `generate_tokens` leaves the session-reference countdown in place. Do not treat generate or reattach as a session-length refresh.
+- `.env` over the `LOOKER_EMBED_SESSION_LENGTH` fallback. The swimlane follows Looker's returned TTL.
+- Host JWT refresh as a success-chained timeout in `host-client.js`, plus one 401 retry. A failed refresh is not an interval. Embed death can happen while Looker TTLs remain. Host-JWT expiry alone does not tear down the page; see CONTEXT for which surface fails how.
+- Browser `Date.now()` as display and refresh scheduling only. Do not add a clock-speed control and expect Looker or the host JWT to expire early.
+- Navigation and API TTLs as Looker response fields. Do not add request fields for them. A shorter `session_length` is the cap.
 - `looker_token_spans` and a swimlane that draws those returned windows. Do not clip Looker bars to now+60s.
 - Two embed tabs as separate clients.
 - In-memory store (do not pretend durability or logout-everywhere).

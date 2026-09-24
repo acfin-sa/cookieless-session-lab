@@ -91,7 +91,7 @@ It is not the complete Embed SDK flow or a failure matrix.
 
 ## Ten-minute demo
 
-1. Keep `LOOKER_EMBED_SESSION_LENGTH=720` for a viewable 12-minute session.
+1. Keep `LOOKER_EMBED_SESSION_LENGTH=720` in `.env` for a viewable 12-minute session. That file overrides the fallback in `app/config.py`. Restart after changing it, then end Looker and acquire again; an existing session keeps the TTL Looker already returned. Navigation and API tokens are about 10 minutes unless this session is shorter, which caps them. Moving the browser clock does not expire any of these tokens.
 2. Log in and compare the **Embed SDK** and **Raw postMessage** tabs.
 3. On the lifetime swimlane, read the four Looker bars: authentication about 30 seconds, navigation and API about 10 minutes, session reference the full 12 minutes. An amber line in the hatched last 60 seconds is `generate_tokens`. The host JWT renews on its own lane. See [ARCHITECTURE.md](ARCHITECTURE.md).
 4. Turn on **Freeze token refresh** and let the short-lived Looker tokens age.

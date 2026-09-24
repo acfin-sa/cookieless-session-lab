@@ -85,12 +85,26 @@ Looker API calls the iframe makes. They are sibling JWTs. Acquire and generate
 usually mint them together. Each response still carries its own TTL, so the
 clocks can diverge. Neither one is the embed session.
 
-`session_reference_token` is that session. `generate_tokens` returns the
-remaining `session_reference_token_ttl` and leaves the original countdown in
-place. A replacement reference string, when Looker sends one, is stored on the
-server and does not restart the countdown. Reattach (acquire again with the
-stored reference) mints a new `authentication_token` for another iframe and
-ignores `session_length`. The same session bar continues.
+Neither request can ask Looker for a shorter navigation or API lifetime. With
+a session longer than about 10 minutes, Looker returns about 10 minutes. Those
+tokens cannot outlive the session, so a shorter `LOOKER_EMBED_SESSION_LENGTH`
+caps both of them, including tokens from later `generate_tokens` calls.
+
+`session_reference_token` is that session. It cannot be refreshed.
+`generate_tokens` returns the remaining `session_reference_token_ttl` and leaves
+the original countdown in place. A replacement reference string, when Looker
+sends one, is stored on the server and does not restart the countdown. Reattach
+(acquire again with the stored reference) mints a new `authentication_token`
+for another iframe and ignores `session_length`. The same session bar continues.
+A new countdown starts only from an acquire that does not send a live
+reference: End Looker, then acquire again.
+
+The number in `app/config.py` is a fallback. If `.env` sets
+`LOOKER_EMBED_SESSION_LENGTH`, that value is what acquire sends. Changing the
+fallback while `.env` still says 720 leaves a 12-minute bar. After you change
+`.env`, restart the process, then start a new Looker session. The swimlane
+draws the TTL Looker returned, not the integer in the file. `/architecture`
+prints the value this process actually loaded.
 
 `authentication_token` is single-use on `/login/embed`. The lab marks it
 consumed when the iframe reaches that URL. `generate_tokens` leaves it
@@ -129,6 +143,24 @@ Renewal is not a new login. Generate uses the server-held session reference, not
 an iframe-chosen one. Zero `session_reference_token_ttl` means Layer B is dead
 (HTTP 409 `SESSION_DEAD`); Layer A may still be valid, so reacquiring Looker does
 not necessarily require another Auth0 login.
+
+The host JWT is a separate clock from every Looker token. While `/lab` is open,
+the browser schedules the next `POST /api/host/refresh` before that JWT expires,
+and a successful refresh schedules the one after it. The cookie authorizes that
+call; the expiring JWT does not. If a refresh fails, nothing is scheduled until
+some later Looker call gets a 401 and tries once more. The embed can then stop
+on the next `generate_tokens` while navigation and API tokens, and even the
+session reference, still have time left. That is a Layer A failure. An expired
+`authentication_token` is not the cause: it was already used once at
+`/login/embed`.
+
+The page does not break at the instant the host JWT expires. The dashboard
+keeps the tokens it already has. The observatory keeps drawing the last
+snapshot. Controls report an error when you use them. The embed stops when
+Looker next asks for tokens and refresh still fails. Moving the browser clock
+forward only changes those drawings and the refresh timer. The host and Looker
+still honor the absolute expiry they issued. There is no clock-speed control
+in this lab.
 
 ## The iframe trust boundary
 
