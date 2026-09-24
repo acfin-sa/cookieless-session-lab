@@ -175,6 +175,7 @@ function initLabUi() {
     cards: requireElement("token-cards"),
     gantt: requireElement("gantt"),
     events: requireElement("event-log"),
+    eventLogCopy: requireElement("btn-copy-event-log"),
     catalog: requireElement("method-catalog"),
     freeze: requireElement("toggle-freeze"),
     userAgentMismatchToggle: requireElement("toggle-user-agent-mismatch"),

@@ -53,7 +53,15 @@
             </section>
 
             <section class="event-log-section">
-                <h2>2. Live event log</h2>
+                <div class="section-heading">
+                    <h2>2. Live event log</h2>
+                    <button type="button" class="copy-log-btn" id="btn-copy-event-log" title="Copy event log to clipboard" aria-label="Copy event log to clipboard">
+                        <svg class="copy-log-icon" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                            <rect x="4.5" y="0.5" width="8" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+                            <rect x="0.5" y="3.5" width="8" height="9" rx="1" fill="var(--panel)" stroke="currentColor" stroke-width="1.2"></rect>
+                        </svg>
+                    </button>
+                </div>
                 <p class="hint">Click a row to highlight the tokens it touched.</p>
                 <div id="event-log" class="event-log"></div>
             </section>

@@ -384,6 +384,36 @@ a.btn { text-decoration: none; display: inline-block; }
   flex-direction: column;
   overflow: hidden;
 }
+.event-log-section .section-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 1.25rem 0 0.4rem;
+}
+.event-log-section .section-heading h2 {
+  margin: 0;
+}
+.copy-log-btn {
+  flex-shrink: 0;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: 0;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  background: #1a2030;
+}
+.copy-log-btn:hover {
+  color: var(--ink);
+  border-color: var(--accent);
+  background: #222a38;
+}
+.copy-log-btn.copied {
+  color: var(--alive);
+  border-color: var(--alive);
+}
 .mermaid-box {
   background: #f4f1ea;
   color: #111;

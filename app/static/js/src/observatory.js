@@ -841,6 +841,60 @@ function isLookerEvent(event) {
   return tokenIds.some(isLookerTokenId);
 }
 
+function formatEventLogText() {
+  if (!snapshot?.events?.length) {
+    return "";
+  }
+  const events = [...snapshot.events].reverse();
+  const blocks = [];
+  for (const event of events) {
+    const when = event.timestamp || "";
+    const status = event.ok ? "ok" : "fail";
+    const tokensIn = (event.tokens_in || []).join(", ") || "—";
+    const tokensOut = (event.tokens_out || []).join(", ") || "—";
+    const lines = [
+      `[${when}] ${event.actor} | ${event.method} | ${status}`,
+      `  ${event.summary || ""}`,
+      `  in: ${tokensIn} · out: ${tokensOut}`,
+    ];
+    if (event.status_code != null) {
+      lines.push(`  status: ${event.status_code}`);
+    }
+    if (event.error) {
+      lines.push(`  error: ${event.error}`);
+    }
+    blocks.push(lines.join("\n"));
+  }
+  return blocks.join("\n\n");
+}
+
+async function copyEventLogToClipboard(button) {
+  const text = formatEventLogText();
+  if (!text) {
+    button.title = "Event log is empty";
+    window.setTimeout(() => {
+      button.title = "Copy event log to clipboard";
+    }, 2000);
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (error) {
+    console.warn("[lab] copy event log failed", error);
+    button.title = "Copy failed — check browser permissions";
+    window.setTimeout(() => {
+      button.title = "Copy event log to clipboard";
+    }, 2500);
+    return;
+  }
+  button.classList.add("copied");
+  button.title = "Copied";
+  window.setTimeout(() => {
+    button.classList.remove("copied");
+    button.title = "Copy event log to clipboard";
+  }, 1500);
+}
+
 // live event log table
 function renderEvents(root) {
   if (!snapshot) {
@@ -981,6 +1035,12 @@ export function bindObservatory(elements) {
     highlightTokens((row.dataset.tokens || "").split(",").filter(Boolean));
     renderEvents(elements.events);
   });
+
+  if (elements.eventLogCopy) {
+    elements.eventLogCopy.addEventListener("click", () => {
+      copyEventLogToClipboard(elements.eventLogCopy);
+    });
+  }
 
   elements.gantt.addEventListener("click", (event) => {
     const barHit = event.target.closest("[data-bar-token-id]");
