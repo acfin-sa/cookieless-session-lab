@@ -55,14 +55,38 @@ remains `session_reference_token`. Observatory `badge` comes from
 
 ### Layer B (Looker — four tokens)
 
-| Token | Role | Storage | Browser JSON |
-| --- | --- | --- | --- |
-| `session_reference_token` | Layer B identity; input to generate/DELETE | `HostSession.looker_session_reference_token` | MUST NOT; stripped in `app/routes/looker.py` |
-| `authentication_token` | single-use `/login/embed` URL | URL once; consumed flag on HostSession | yes, acquire only |
-| `navigation_token` | in-iframe navigation JWT | iframe / embed URL | yes |
-| `api_token` | iframe Looker API JWT | iframe | yes |
+Human write-up of this contract: [ARCHITECTURE.md](../../ARCHITECTURE.md) sections "Looker cookieless contract" and "Reading the lifetime swimlane".
 
-`navigation_token` and `api_token` are siblings: independent TTLs; `generate_tokens` rotates both. They are not aliases and are not Layer B identity.
+Looker returns the TTLs. The lab sets only `session_length` (`LOOKER_EMBED_SESSION_LENGTH`, default 720). Usual Looker values:
+
+| Token | Usual TTL | Role | Storage | Browser JSON |
+| --- | --- | --- | --- | --- |
+| `session_reference_token` | `session_length` | Layer B identity; input to generate/DELETE | `HostSession.looker_session_reference_token` | MUST NOT; stripped in `app/routes/looker.py` |
+| `authentication_token` | ~30 s, single use | `/login/embed` once | URL once; consumed flag on HostSession | yes, acquire only |
+| `navigation_token` | ~10 min | in-iframe navigation JWT | iframe / embed URL | yes |
+| `api_token` | ~10 min | iframe Looker API JWT | iframe | yes |
+
+`navigation_token` and `api_token` are siblings with independent `exp`. They are not aliases and are not Layer B identity. Acquire and generate usually mint them together. Draw each returned TTL. `generate_tokens` rotates both when Looker asks.
+
+`session_reference_token` countdown starts at acquire. `generate_tokens` stores the returned remaining `session_reference_token_ttl` and keeps `looker_session_reference_issued_at`. A new reference string, if Looker returns one, replaces the secret and leaves the countdown in place. Reattach (acquire with the stored reference) ignores `session_length` and keeps that issued-at when the new absolute expiry is within 15 seconds of the previous one. A later expiry beyond that starts a new span (`HostSession.note_session_reference_window`).
+
+`authentication_token` is consumed by iframe navigation to `/login/embed`. `generate_tokens` leaves it unchanged. Its TTL is shorter than the nav/api ask window, so it stays out of the expiring state (`build_observatory_snapshot` and `currentTokenState`).
+
+### When the iframe asks
+
+1. First `session:tokens:request` after load reuses acquire's navigation and API tokens. Embed SDK: `initCookieless`. Raw tab: `postmessage-tab.js`.
+2. Looker sends `session:tokens:request` again when either sibling TTL is inside the last 60 seconds.
+3. That ask calls `generate_tokens`, which rotates both siblings.
+4. `EXPIRING_WINDOW_SECONDS` in `app/services/observatory.py` is that window. Snapshot field `looker_refresh_window_seconds` feeds the swimlane hatch, the expiring state, and the lab overlay. Do not fork a second constant in JS.
+5. Freeze returns the current JWTs (`frozen: true`) and does not open new spans or record a generate marker.
+
+`session_reference_token_ttl == 0` is session death (`SESSION_DEAD`), even if nav/api `exp` is still in the future.
+
+### Swimlane
+
+`HostSession.looker_token_spans` is the history the swimlane draws (issued, expires, closed, close reason; no secrets). Reasons: `refreshed` (generate), `replaced` (later acquire), `consumed` (embed login), `dropped` (lab drop; bar still runs to Looker's TTL), `revoked` (End Looker or TTL 0; bar stops at the close).
+
+`app/static/js/src/observatory.js` `renderGantt` sizes the axis through those Looker ends (plus iframe envelope). It stacks successive nav/api spans, hatches the last `looker_refresh_window_seconds` of each, and puts `generate_tokens` / acquire markers on the Looker and iframe lanes. Host JWT markers stay on the Auth0 and Host lanes. Host and Auth0 bars that outlive the axis draw a continuation chevron. Do not clip Looker bars to now+60s.
 
 ## Storage matrix
 

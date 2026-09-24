@@ -93,7 +93,7 @@ It is not the complete Embed SDK flow or a failure matrix.
 
 1. Keep `LOOKER_EMBED_SESSION_LENGTH=720` for a viewable 12-minute session.
 2. Log in and compare the **Embed SDK** and **Raw postMessage** tabs.
-3. Watch the host token renew independently from Looker navigation/API tokens.
+3. On the lifetime swimlane, read the four Looker bars: authentication about 30 seconds, navigation and API about 10 minutes, session reference the full 12 minutes. An amber line in the hatched last 60 seconds is `generate_tokens`. The host JWT renews on its own lane. See [ARCHITECTURE.md](ARCHITECTURE.md).
 4. Turn on **Freeze token refresh** and let the short-lived Looker tokens age.
 5. Turn freeze off, reacquire if needed, then enable **Force User-Agent
    mismatch** to make the next Looker generate call fail.

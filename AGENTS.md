@@ -19,7 +19,7 @@ Human onboarding: [README.md](README.md). Human design rationale:
 
 ## Read first
 
-1. [docs/agent/CONTEXT.md](docs/agent/CONTEXT.md) — trust boundaries and token lifecycle
+1. [docs/agent/CONTEXT.md](docs/agent/CONTEXT.md) — trust boundaries, Looker cookieless contract, swimlane
 2. [docs/agent/INVARIANTS.md](docs/agent/INVARIANTS.md) — non-negotiable rules
 3. [docs/agent/CODEMAP.md](docs/agent/CODEMAP.md) — file-to-symbol and route map
 4. [docs/agent/CHANGEPLAYBOOK.md](docs/agent/CHANGEPLAYBOOK.md) — safe changes and verification

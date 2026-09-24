@@ -338,14 +338,26 @@ a.btn { text-decoration: none; display: inline-block; }
 .gantt-legend .swatch.state-consumed { background: var(--consumed); }
 .gantt-legend .swatch.state-revoked { background: var(--revoked); }
 .gantt-legend .swatch.state-unborn { background: var(--unborn); }
-.gantt-legend .swatch.state-dotted {
+.gantt-legend .swatch.state-hatch {
   background: repeating-linear-gradient(
-    90deg,
-    var(--accent),
-    var(--accent) 2px,
+    35deg,
+    #c5cedb,
+    #c5cedb 2px,
     transparent 2px,
-    transparent 6px
+    transparent 5px
   );
+  border: 1px solid var(--line);
+}
+.gantt-legend .swatch.state-marker-generate {
+  background: repeating-linear-gradient(90deg, #f0b429, #f0b429 2px, transparent 2px, transparent 5px);
+  border: 1px solid var(--line);
+}
+.gantt-legend .swatch.state-marker-acquire {
+  background: repeating-linear-gradient(90deg, #6cb6ff, #6cb6ff 3px, transparent 3px, transparent 6px);
+  border: 1px solid var(--line);
+}
+.gantt-legend .swatch.state-marker-host {
+  background: repeating-linear-gradient(90deg, #8b97ab, #8b97ab 2px, transparent 2px, transparent 6px);
   border: 1px solid var(--line);
 }
 

@@ -44,6 +44,8 @@ the teaching became wrong. Do not re-copy the full inventory into those files.
 - Strip of `session_reference_token` in `app/routes/looker.py`.
 - Generate identity from `HostSession`, not iframe body.
 - Independent nav/api JWT clocks vs iframe `session:expired`.
+- Looker cookieless lifetimes and the 60s nav/api ask (`EXPIRING_WINDOW_SECONDS`). `authentication_token` stays outside that window. `generate_tokens` leaves the session-reference countdown in place.
+- `looker_token_spans` and a swimlane that draws those returned windows. Do not clip Looker bars to now+60s.
 - Two embed tabs as separate clients.
 - In-memory store (do not pretend durability or logout-everywhere).
 - `HOST_ACCESS_TOKEN_TTL_SECONDS` remaining a Python constant (not silently moved to `.env` without docs + config update).
@@ -93,6 +95,7 @@ Manual `/lab` checks:
 8. `/sequence` still matches `docs/sequence-happy-path.mmd` (happy-path postMessage).
 9. If token-moving methods changed, `/lab` catalog matches `docs/token-method-map.json`.
 10. If routes, tokens, or token-moving methods changed: token-method-map, INVARIANTS, CODEMAP, and CONTEXT match the code. Human docs were not used as a second full inventory.
+11. Swimlane: `authentication_token` is its returned single-use window (~30s) with a tick at `/login/embed`; each `navigation_token` and `api_token` generation keeps its returned window and a hatch on the last 60s; `session_reference_token` stays one bar from acquire through `generate_tokens`.
 
 ## Architecture page live TTLs
 

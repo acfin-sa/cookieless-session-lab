@@ -237,7 +237,21 @@ def _state_reason(
     session: HostSession,
 ) -> str:
     if state == "consumed":
+        if token_id == "authentication_token":
+            window = _looker_span_window_seconds(session, token_id)
+            if window is not None:
+                return f"used once on /login/embed. Single-use window {window}s."
         return "used once on /login/embed — not revoked"
+    if token_id in {"navigation_token", "api_token"} and state == "expiring":
+        return (
+            f"Looker asks for a new token in this last {EXPIRING_WINDOW_SECONDS}s "
+            "(session:tokens:request). Each JWT keeps its own exp."
+        )
+    if token_id == "session_reference_token" and state == "expiring":
+        return (
+            f"under {EXPIRING_WINDOW_SECONDS}s left on the session. "
+            "generate_tokens leaves this expiry on its original countdown."
+        )
     if token_id == "session_reference_token" and state == "alive":
         if session.any_iframe_session_expired() and session.looker_session_reference_token:
             return "iframe session expired does not revoke this reference — generate_tokens or re-acquire"
@@ -254,7 +268,7 @@ def _state_reason(
     if token_id == "authentication_token" and state == "revoked":
         return "Layer B torn down before authentication_token was consumed"
     if state == "expiring":
-        return "inside the ~60s refresh window"
+        return f"inside the last {EXPIRING_WINDOW_SECONDS}s"
     if state == "revoked" and token_id in {
         "auth0_refresh",
         "auth0_access",
@@ -263,6 +277,34 @@ def _state_reason(
     }:
         return "host session revoked (logout)"
     return ""
+
+
+def _looker_span_window_seconds(session: HostSession, token_id: str) -> int | None:
+    for span in reversed(session.looker_token_spans):
+        if span.get("token_id") != token_id:
+            continue
+        issued_at = span.get("issued_at")
+        expires_at = span.get("expires_at")
+        if issued_at is None or expires_at is None:
+            return None
+        return max(0, int((expires_at - issued_at).total_seconds()))
+    return None
+
+
+def _public_looker_spans(session: HostSession, token_id: str) -> list[dict[str, Any]]:
+    public: list[dict[str, Any]] = []
+    for span in session.looker_token_spans:
+        if span.get("token_id") != token_id:
+            continue
+        public.append(
+            {
+                "issued_at": utc_isoformat(span.get("issued_at")),
+                "expires_at": utc_isoformat(span.get("expires_at")),
+                "closed_at": utc_isoformat(span.get("closed_at")),
+                "close_reason": span.get("close_reason"),
+            }
+        )
+    return public
 
 
 def build_observatory_snapshot(session: HostSession) -> dict[str, Any]:
@@ -292,6 +334,10 @@ def build_observatory_snapshot(session: HostSession) -> dict[str, Any]:
             now=now,
             revoked_when_absent=revoked_when_absent,
         )
+        # authentication_token's whole life is ~30s, inside the 60s nav/api ask
+        # window. That window is not an authentication refresh.
+        if token_id == "authentication_token" and state == "expiring":
+            state = "alive"
         display_expires_at = expires_at
         planned_expires_at = None
         if (
@@ -333,6 +379,7 @@ def build_observatory_snapshot(session: HostSession) -> dict[str, Any]:
             "created_by": created_by,
             "renewed_by": renewed_by,
             "consumed_by": consumed_by,
+            "spans": _public_looker_spans(session, token_id),
         }
         tokens.append(card)
     return {
@@ -353,6 +400,7 @@ def build_observatory_snapshot(session: HostSession) -> dict[str, Any]:
         "iframe_sessions": [iframe_client_snapshot(session, now, spec) for spec in IFRAME_CLIENT_SPECS],
         "tokens": tokens,
         "events": [event.to_public_dict() for event in session.events[-120:]],
+        "looker_refresh_window_seconds": EXPIRING_WINDOW_SECONDS,
         "refresh_markers": [
             {
                 "at": utc_isoformat(marker["at"] if isinstance(marker, dict) else marker),

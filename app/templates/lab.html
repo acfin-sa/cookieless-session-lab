@@ -44,7 +44,10 @@
                     <li><span class="swatch state-expired"></span> expired</li>
                     <li><span class="swatch state-consumed"></span> consumed</li>
                     <li><span class="swatch state-revoked"></span> revoked</li>
-                    <li><span class="swatch state-dotted">  </span> dotted lines: generate_tokens / host refresh</li>
+                    <li><span class="swatch state-hatch"></span> <span id="gantt-legend-hatch-text">hatch: last 60s of navigation_token and api_token, when Looker asks</span></li>
+                    <li><span class="swatch state-marker-generate"></span> generate_tokens</li>
+                    <li><span class="swatch state-marker-acquire"></span> Looker acquire</li>
+                    <li><span class="swatch state-marker-host"></span> host JWT refresh</li>
                 </ul>
                 <div id="gantt" class="gantt"></div>
             </section>

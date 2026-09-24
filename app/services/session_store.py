@@ -104,11 +104,94 @@ class HostSession:
 
     events: list[LabEvent] = field(default_factory=list)
     refresh_markers: list[dict[str, Any]] = field(default_factory=list)
+    # Lifetime intervals for the four Looker embed tokens. No token secrets.
+    # Each generate_tokens call closes the previous navigation/api interval and
+    # opens a new one; session_reference stays one interval unless the session
+    # itself is replaced. The swimlane reads this so a refresh does not erase
+    # the short JWT window it just replaced.
+    looker_token_spans: list[dict[str, Any]] = field(default_factory=list)
 
-    def record_refresh_marker(self, process: str) -> None:
-        self.refresh_markers.append({"at": utc_now(), "process": process})
+    def record_refresh_marker(self, process: str, at: datetime | None = None) -> None:
+        self.refresh_markers.append({"at": at or utc_now(), "process": process})
         if len(self.refresh_markers) > HISTORY_LIMIT:
             self.refresh_markers = self.refresh_markers[-HISTORY_LIMIT:]
+
+    def open_looker_token_span(
+        self,
+        token_id: str,
+        issued_at: datetime,
+        expires_at: datetime | None,
+        close_reason: str = "replaced",
+    ) -> None:
+        self.close_looker_token_span(token_id, issued_at, close_reason)
+        self.looker_token_spans.append(
+            {
+                "token_id": token_id,
+                "issued_at": issued_at,
+                "expires_at": expires_at,
+                "closed_at": None,
+                "close_reason": None,
+            }
+        )
+        if len(self.looker_token_spans) > HISTORY_LIMIT:
+            self.looker_token_spans = self.looker_token_spans[-HISTORY_LIMIT:]
+
+    def close_looker_token_span(self, token_id: str, closed_at: datetime, reason: str) -> None:
+        for span in reversed(self.looker_token_spans):
+            if span["token_id"] == token_id and span["closed_at"] is None:
+                span["closed_at"] = closed_at
+                span["close_reason"] = reason
+                return
+
+    def close_open_looker_spans(self, closed_at: datetime, reason: str) -> None:
+        for token_id in (
+            "session_reference_token",
+            "authentication_token",
+            "navigation_token",
+            "api_token",
+        ):
+            self.close_looker_token_span(token_id, closed_at, reason)
+
+    def set_open_looker_span_expiry(self, token_id: str, expires_at: datetime | None) -> bool:
+        for span in reversed(self.looker_token_spans):
+            if span["token_id"] == token_id and span["closed_at"] is None:
+                span["expires_at"] = expires_at
+                return True
+        return False
+
+    def note_session_reference_window(
+        self,
+        *,
+        had_reference: bool,
+        now: datetime,
+        expires_at: datetime | None,
+    ) -> None:
+        """Keep one session_reference bar across generate and reattach.
+
+        Looker does not extend the session on generate_tokens, and reattach
+        ignores session_length. A later absolute expiry within 15 seconds is
+        clock drift, not a new session. A meaningfully later expiry is a new
+        session and starts a new bar.
+        """
+        previous_issued = self.looker_session_reference_issued_at
+        previous_expires = self.looker_session_reference_expires_at
+        same_session = False
+        if (
+            had_reference
+            and previous_issued is not None
+            and previous_expires is not None
+            and expires_at is not None
+        ):
+            same_session = (expires_at - previous_expires).total_seconds() <= 15
+        if same_session:
+            self.looker_session_reference_issued_at = previous_issued
+            self.looker_session_reference_expires_at = expires_at
+            if not self.set_open_looker_span_expiry("session_reference_token", expires_at):
+                self.open_looker_token_span("session_reference_token", previous_issued, expires_at)
+            return
+        self.looker_session_reference_issued_at = now
+        self.looker_session_reference_expires_at = expires_at
+        self.open_looker_token_span("session_reference_token", now, expires_at)
 
     def mark_looker_session_revoked(self) -> None:
         self.looker_session_revoked = True
@@ -120,15 +203,26 @@ class HostSession:
         self.looker_session_revoked_at = None
 
     def mark_session_reference_dropped(self) -> None:
+        now = utc_now()
         self.looker_session_reference_token = None
         self.session_reference_dropped = True
         if self.session_reference_dropped_at is None:
-            self.session_reference_dropped_at = utc_now()
+            self.session_reference_dropped_at = now
+        self.close_looker_token_span(
+            "session_reference_token",
+            self.session_reference_dropped_at,
+            "dropped",
+        )
 
     def mark_authentication_consumed(self) -> None:
         self.looker_authentication_consumed = True
         if self.looker_authentication_consumed_at is None:
             self.looker_authentication_consumed_at = utc_now()
+        self.close_looker_token_span(
+            "authentication_token",
+            self.looker_authentication_consumed_at,
+            "consumed",
+        )
 
     def any_iframe_session_expired(self) -> bool:
         return self.looker_sdk_iframe_expired or self.looker_postmessage_iframe_expired

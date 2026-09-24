@@ -12,6 +12,8 @@ Lifecycle and trust-boundary detail: [CONTEXT.md](CONTEXT.md). File/route map: [
 - MUST NOT return Auth0 refresh, access, or ID tokens to the browser.
 - MUST keep `authentication_token` single-use on the embed login URL (`/login/embed`); mark consumed via `POST /api/lab/events` method `iframe navigation to embed login URL`.
 - MUST treat `navigation_token` and `api_token` as sibling JWTs: independent TTL/`exp`; `generate_tokens` rotates both; they are not Layer B identity.
+- MUST treat `authentication_token` as single-use and outside the nav/api ask window. Its usual Looker TTL is ~30s. `generate_tokens` leaves it unchanged.
+- MUST treat `session_reference_token` expiry as the acquire countdown. `generate_tokens` stores Looker's remaining TTL and keeps `looker_session_reference_issued_at`. Reattach keeps that issued-at unless the new absolute expiry is more than 15 seconds later (`note_session_reference_window`).
 - MUST treat `host_session_id` as opaque lookup only.
 - MUST treat `host_access_token` as the host BFF bearer (Layer A). It gates
   `/api/looker/*` and `/api/lab/*`; it is not Looker's `api_token` and not Auth0
@@ -35,6 +37,19 @@ Lifecycle and trust-boundary detail: [CONTEXT.md](CONTEXT.md). File/route map: [
 - MUST NOT treat freeze as session death.
 - MUST log generate freeze at the host HTTP boundary without claiming nav/api rotation.
 - MUST log Looker acquire/generate/end failures once at the HTTP boundary (not also in `looker_client`).
+
+## Swimlane clocks
+
+- MUST draw Looker swimlane bars from returned TTLs and `HostSession.looker_token_spans`.
+- MUST keep one `session_reference_token` span across `generate_tokens`.
+- MUST keep each navigation and API generation after refresh (`close_reason` `refreshed`), including the window Looker already replaced.
+- MUST hatch the last `EXPIRING_WINDOW_SECONDS` (60) of each `navigation_token` and `api_token` span. That is when Looker sends `session:tokens:request` for that JWT. The snapshot field is `looker_refresh_window_seconds`. The page reads that field.
+- MUST leave `authentication_token` out of that hatch and out of the expiring state. A tick marks `/login/embed`. The bar length stays the returned single-use window.
+- MUST stop a `revoked` span at the close (End Looker or TTL 0). A `dropped` span still runs to Looker's TTL, with a tick at the drop.
+- MUST put `generate_tokens` and Looker acquire markers on the Looker and iframe lanes. Host JWT mint markers stay on the Auth0 and Host lanes.
+- MUST size the swimlane axis through the Looker span ends. Host and Auth0 bars past that axis get a continuation mark.
+- MUST NOT clip Looker bars to now+60s or replace a span's `issued_at` when the token refreshes.
+- MUST NOT record a generate marker or open nav/api spans when freeze skips the Looker call.
 
 ## session:expired vs revoke
 

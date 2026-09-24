@@ -135,23 +135,37 @@ def acquire_embed_session(session: HostSession, user_agent: str) -> dict[str, An
 
     now = utc_now()
     session.looker_session_reference_token = response.session_reference_token
-    session.looker_session_reference_issued_at = now
-    session.looker_session_reference_expires_at = expiration_from_ttl_seconds(response.session_reference_token_ttl)
+    session.note_session_reference_window(
+        had_reference=bool(existing_reference),
+        now=now,
+        expires_at=expiration_from_ttl_seconds(response.session_reference_token_ttl),
+    )
     session.looker_authentication_token = response.authentication_token
     session.looker_authentication_issued_at = now
     session.looker_authentication_expires_at = expiration_from_ttl_seconds(response.authentication_token_ttl)
     session.looker_authentication_consumed = False
     session.looker_authentication_consumed_at = None
+    session.open_looker_token_span(
+        "authentication_token",
+        now,
+        session.looker_authentication_expires_at,
+    )
     session.looker_navigation_token = response.navigation_token
     session.looker_navigation_issued_at = now
     session.looker_navigation_expires_at = expiration_from_ttl_seconds(response.navigation_token_ttl)
+    session.open_looker_token_span(
+        "navigation_token",
+        now,
+        session.looker_navigation_expires_at,
+    )
     session.looker_api_token = response.api_token
     session.looker_api_token_issued_at = now
     session.looker_api_token_expires_at = expiration_from_ttl_seconds(response.api_token_ttl)
+    session.open_looker_token_span("api_token", now, session.looker_api_token_expires_at)
     session.session_reference_dropped = False
     session.session_reference_dropped_at = None
     session.clear_looker_session_revoked()
-    session.record_refresh_marker("Looker acquire")
+    session.record_refresh_marker("Looker acquire", at=now)
 
     browser_payload = {
         "authentication_token": response.authentication_token,
@@ -239,14 +253,31 @@ def generate_embed_tokens(session: HostSession, user_agent: str) -> dict[str, An
     now = utc_now()
     if response.session_reference_token:
         session.looker_session_reference_token = response.session_reference_token
-    session.looker_session_reference_expires_at = expiration_from_ttl_seconds(session_ttl)
+    # Remaining session_reference_token_ttl counts down. Do not restart issued_at.
+    session.note_session_reference_window(
+        had_reference=True,
+        now=now,
+        expires_at=expiration_from_ttl_seconds(session_ttl),
+    )
     session.looker_navigation_token = response.navigation_token
     session.looker_navigation_issued_at = now
     session.looker_navigation_expires_at = expiration_from_ttl_seconds(response.navigation_token_ttl)
+    session.open_looker_token_span(
+        "navigation_token",
+        now,
+        session.looker_navigation_expires_at,
+        close_reason="refreshed",
+    )
     session.looker_api_token = response.api_token
     session.looker_api_token_issued_at = now
     session.looker_api_token_expires_at = expiration_from_ttl_seconds(response.api_token_ttl)
-    session.record_refresh_marker("Looker generate_tokens")
+    session.open_looker_token_span(
+        "api_token",
+        now,
+        session.looker_api_token_expires_at,
+        close_reason="refreshed",
+    )
+    session.record_refresh_marker("Looker generate_tokens", at=now)
 
     browser_payload = {
         "navigation_token": response.navigation_token,
@@ -279,6 +310,7 @@ def end_embed_session(session: HostSession, user_agent: str) -> None:
     reference = session.looker_session_reference_token
     if not reference:
         session.mark_looker_session_revoked()
+        session.close_open_looker_spans(utc_now(), "revoked")
         return
     sdk = get_looker_sdk()
     try:
@@ -330,6 +362,8 @@ def end_embed_session(session: HostSession, user_agent: str) -> None:
 def clear_looker_tokens(session: HostSession) -> None:
     # Preserve looker_authentication_consumed so a consumed auth card stays consumed
     # after End Looker; nav/api show revoked via looker_session_revoked when cleared.
+    # Already-consumed authentication spans stay consumed. Open intervals end here.
+    session.close_open_looker_spans(utc_now(), "revoked")
     session.looker_session_reference_token = None
     session.looker_session_reference_issued_at = None
     session.looker_session_reference_expires_at = None

@@ -45,6 +45,24 @@ id; it is not sent to Auth0 or Looker.
 siblings under the same session reference, are normally rotated together, and
 have independent returned TTLs.
 
+## How long are the four Looker tokens, and when do they refresh?
+
+Looker chooses these TTLs. This lab sets only the session length (default 720
+seconds). The full contract and the swimlane reading guide are in
+[ARCHITECTURE.md](../ARCHITECTURE.md).
+
+| Token | Usual lifetime | Refresh |
+| --- | --- | --- |
+| `authentication_token` | about 30 seconds, single use on `/login/embed` | Acquire mints it. `generate_tokens` leaves it unchanged. |
+| `navigation_token` | about 10 minutes | Looker asks in the last 60 seconds of this JWT or of `api_token`. |
+| `api_token` | about 10 minutes | Same ask. `generate_tokens` rotates both siblings. |
+| `session_reference_token` | the session length, server only | `generate_tokens` returns the time remaining and leaves that countdown in place. |
+
+The first `session:tokens` reply after the iframe loads reuses the acquire
+tokens. Later replies call generate. The `/lab` swimlane draws each returned
+window: a short authentication bar, stacked navigation and API generations with
+a hatch on the last 60 seconds, and one session-reference bar across generate.
+
 ## Does renew mean login again?
 
 No. Login proves identity; renewal rotates short-lived credentials while the

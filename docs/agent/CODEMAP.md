@@ -61,13 +61,14 @@ Acquire / generate / end implementation: `app/routes/looker.py` + `app/services/
 
 `HostSession` keyed by `host_session_id`. `SessionStore._sessions_by_id`. Singleton `session_store`. Methods: `save`, `get`, `delete`. No `sub` index.
 
-Relevant fields: Auth0 tokens + claims; host JWT + `jti`; Looker four tokens + TTLs; flags `freeze_token_refresh`, `force_user_agent_mismatch`, `session_reference_dropped`, `looker_session_revoked`, `host_session_revoked`; per-iframe SDK/postmessage started/expired; `user_agent` (login); `events`; `refresh_markers`.
+Relevant fields: Auth0 tokens + claims; host JWT + `jti`; Looker four tokens + TTLs; `looker_token_spans` (issued/expires/closed for those four ids, no secrets — swimlane history); flags `freeze_token_refresh`, `force_user_agent_mismatch`, `session_reference_dropped`, `looker_session_revoked`, `host_session_revoked`; per-iframe SDK/postmessage started/expired; `user_agent` (login); `events`; `refresh_markers`.
 
 ## Config knobs
 
 | Symbol | Where | Notes |
 | --- | --- | --- |
-| `LOOKER_EMBED_SESSION_LENGTH` | `.env` / `config.py` default 720 | Looker `session_length` at acquire |
+| `LOOKER_EMBED_SESSION_LENGTH` | `.env` / `config.py` default 720 | Looker `session_length` at acquire. The other three Looker TTLs come back from Looker (~30s auth, ~10min nav, ~10min api). |
+| `EXPIRING_WINDOW_SECONDS` | `app/services/observatory.py` **60** | Nav/api ask window. Snapshot `looker_refresh_window_seconds`. Swimlane hatch and expiring state read it. Not used for `authentication_token`. |
 | `LOOKER_EMBED_FILTER_PERIODO` / `GESTOR` | `.env` / `config.py` | Embed SDK cold-start `withFilters`; via `page_config.coldStartDashboardFilters` |
 | `HOST_ACCESS_TOKEN_TTL_SECONDS` | `app/config.py` **hardcoded 200** | not `.env` |
 | `APP_KEY_SECRET` | `.env` | HS256 host JWT + SessionMiddleware |
@@ -84,5 +85,7 @@ Auth0 token TTLs are tenant settings, not lab env.
 | --- | --- | --- | --- |
 | Embed SDK | `embed-sdk-tab.js` | `startEmbedSdkTab` | acquire + generate via SDK callbacks |
 | Raw postMessage | `postmessage-tab.js` | `startPostMessageTab` | acquire; first `session:tokens` reuses acquire; later generate |
+
+Swimlane: `renderGantt` in `app/static/js/src/observatory.js`, fed by `looker_token_spans` and `looker_refresh_window_seconds` from `build_observatory_snapshot`.
 
 `lab.js` constants: `EMBED_SDK_TAB = "embed-sdk"`, `POSTMESSAGE_TAB = "postmessage"`. Controls: `#toggle-freeze`, `#toggle-user-agent-mismatch`, `#btn-drop-session-reference`, `#btn-end-looker`.

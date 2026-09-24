@@ -65,7 +65,56 @@ from the tenant. Looker returns the individual authentication / navigation /
 API / session-reference TTLs; the UI follows those values.
 
 `navigation_token` and `api_token` are siblings, not aliases: usually minted
-together, each with its own clock.
+together, each with its own clock. Neither one is the embed session.
+
+### Looker cookieless contract
+
+These are the four tokens from `acquire_embed_cookieless_session`. Usual
+Looker lifetimes are below. A given response can differ; the UI follows the
+TTLs Looker returned.
+
+| Token | Usual lifetime | Who holds it | What ends it |
+| --- | --- | --- | --- |
+| `authentication_token` | about 30 seconds | Embed login URL, once | Use on `/login/embed`, or the 30-second TTL |
+| `navigation_token` | about 10 minutes | Iframe | Its own `exp`, then `generate_tokens` replaces it |
+| `api_token` | about 10 minutes | Iframe | Its own `exp`, then `generate_tokens` replaces it |
+| `session_reference_token` | `session_length` (lab default 720 s) | Server only | TTL 0, End Looker, or logout |
+
+`navigation_token` authorizes movement inside the embed. `api_token` authorizes
+Looker API calls the iframe makes. They are sibling JWTs. Acquire and generate
+usually mint them together. Each response still carries its own TTL, so the
+clocks can diverge. Neither one is the embed session.
+
+`session_reference_token` is that session. `generate_tokens` returns the
+remaining `session_reference_token_ttl` and leaves the original countdown in
+place. A replacement reference string, when Looker sends one, is stored on the
+server and does not restart the countdown. Reattach (acquire again with the
+stored reference) mints a new `authentication_token` for another iframe and
+ignores `session_length`. The same session bar continues.
+
+`authentication_token` is single-use on `/login/embed`. The lab marks it
+consumed when the iframe reaches that URL. `generate_tokens` leaves it
+unchanged. Its whole life is shorter than the navigation/API ask window, so
+the observatory keeps it out of that window's yellow state.
+
+### When Looker asks for new iframe tokens
+
+After the iframe loads, it sends `session:tokens:request`. The first reply
+reuses the navigation and API tokens from acquire. The Embed SDK does that
+inside `initCookieless`. The raw postMessage tab does the same.
+
+Looker sends that request again when either sibling is inside its last 60
+seconds. The lab constant is `EXPIRING_WINDOW_SECONDS` in
+`app/services/observatory.py`. The snapshot field
+`looker_refresh_window_seconds` is what the page uses for the hatch, the
+expiring state, and the overlay. `generate_tokens` then rotates both siblings,
+including the one that still had more than 60 seconds left. Freeze answers
+that ask with the same JWTs and does not call Looker, so the current windows
+keep running until their own `exp`.
+
+A returned `session_reference_token_ttl` of 0 means the embed session is dead.
+The lab turns that into HTTP 409 `SESSION_DEAD`. The iframe tokens may still
+show time on their own clocks. Renewal still requires a new acquire.
 
 ## Acquire, renew, and login are different operations
 
@@ -96,6 +145,34 @@ The two lab tabs implement the same boundary differently:
 The diagram at [`docs/sequence-happy-path.mmd`](docs/sequence-happy-path.mmd),
 also rendered at `/sequence`, shows the raw postMessage happy path. It is not a
 complete SDK trace or failure matrix.
+
+## Reading the lifetime swimlane
+
+The swimlane on `/lab` is the picture of this contract. Bar length is the TTL
+Looker returned for that mint. The time axis runs through those Looker ends.
+Host and Auth0 bars that outlive the axis end in a chevron.
+
+| Picture | Meaning |
+| --- | --- |
+| One `session_reference_token` bar | Session from acquire until its countdown. `generate_tokens` leaves that bar in place. |
+| Short `authentication_token` bar, with a tick | Returned single-use window. The tick is `/login/embed`. |
+| Stacked `navigation_token` or `api_token` bars | Each generation keeps its own returned window. |
+| Hatch at the end of a navigation or API bar | That JWT's last 60 seconds. Looker asks when either sibling enters its hatch, then rotates both. |
+| Amber dashed line on the Looker and iframe lanes | `generate_tokens`. It lines up with the start of the new navigation and API bars. |
+| Blue dashed line on those lanes | Looker acquire. |
+| Gray dashed line on the Auth0 and Host lanes | Host JWT mint. |
+| Tick on the session-reference bar, bar continues | Host dropped its copy. Looker keeps the session until the bar ends. |
+| Session-reference bar stops early | End Looker, or Looker reported TTL 0. |
+
+The iframe row uses the session-reference end while generate can still rotate
+tokens. With freeze or a forced User-Agent mismatch, that row ends at the
+current navigation and API expiries, because the next rotate will not happen.
+
+History is `HostSession.looker_token_spans` (issued, expires, closed; no token
+secrets). Closing a span as `refreshed` is generate. `replaced` is a later
+acquire. `consumed` is embed login. `dropped` is the lab control. `revoked` is
+End Looker or TTL 0. The constellation card for `authentication_token` shows
+the same single-use window after it has been used.
 
 ## User-Agent and embed-domain
 

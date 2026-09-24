@@ -120,7 +120,8 @@ function updateExpiryCountdownOverlays() {
     .sort((left, right) => left - right)[0];
   const overlays = [requireElement("overlay-embed-sdk"), requireElement("overlay-postmessage")];
   for (const overlay of overlays) {
-    if (soonestRemainingSeconds === undefined || soonestRemainingSeconds >= 60) {
+    const refreshWindowSeconds = remaining.refreshWindowSeconds ?? 60;
+    if (soonestRemainingSeconds === undefined || soonestRemainingSeconds >= refreshWindowSeconds) {
       overlay.classList.add("hidden");
       overlay.textContent = "";
     } else {

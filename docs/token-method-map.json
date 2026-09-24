@@ -38,7 +38,7 @@
       "layer": "B",
       "badge": "Looker",
       "storage": "server",
-      "purpose": "Looker embed session identity. Server only; stripped from JSON to the browser."
+      "purpose": "Looker embed session identity for session_length. Server only. generate_tokens returns the remaining TTL and leaves that countdown in place."
     },
     {
       "id": "authentication_token",
@@ -46,7 +46,7 @@
       "layer": "B",
       "badge": "Looker",
       "storage": "URL-once",
-      "purpose": "Single-use bootstrap for /login/embed. Not the host JWT."
+      "purpose": "Single-use /login/embed bootstrap. Looker TTL is about 30 seconds. generate_tokens leaves it unchanged."
     },
     {
       "id": "navigation_token",
@@ -54,7 +54,7 @@
       "layer": "B",
       "badge": "Looker",
       "storage": "iframe / URL",
-      "purpose": "Page/dashboard navigation inside the embed iframe. Independent JWT clock from api_token."
+      "purpose": "In-iframe navigation JWT. Looker TTL is about 10 minutes, on its own exp. Looker asks in the last 60 seconds of this token or of api_token."
     },
     {
       "id": "api_token",
@@ -62,7 +62,7 @@
       "layer": "B",
       "badge": "Looker",
       "storage": "iframe",
-      "purpose": "Looker API calls the iframe makes (queries, data). Independent JWT clock from navigation_token."
+      "purpose": "Iframe Looker API JWT. Looker TTL is about 10 minutes, on its own exp. generate_tokens rotates it together with navigation_token."
     }
   ],
   "methods": [
@@ -184,7 +184,7 @@
       "direction": "Host API → Looker API",
       "tokens_in": ["session_reference_token", "navigation_token", "api_token"],
       "tokens_out": ["navigation_token", "api_token", "session_reference_token"],
-      "where_after": "session_reference_token stays on the server. New nav/api tokens returned to the browser without the reference."
+      "where_after": "session_reference_token stays on the server and its countdown continues. New nav/api tokens go to the browser without the reference. Both siblings rotate together."
     },
     {
       "id": "host_end_embed",

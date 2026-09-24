@@ -29,11 +29,12 @@ sequenceDiagram
     Iframe->>Browser: postMessage session:tokens:request
     Browser->>Iframe: postMessage session:tokens (api + nav)
 
-    loop Looker asks inside the last 60s of nav/api TTL
+    loop Looker asks when either nav or api is inside its last 60s
         Iframe->>Browser: session:tokens:request
         Browser->>Host: PUT /api/looker/generate-embed-tokens
         Host->>Looker: PUT /embed/cookieless_session/generate_tokens
-        Looker-->>Host: new nav + api (same session_reference)
+        Looker-->>Host: new nav + api; session_reference TTL counts down
+        Note over Host: generate rotates both siblings and leaves the session countdown in place.
         Host-->>Browser: nav + api only
         Browser->>Iframe: session:tokens
     end
