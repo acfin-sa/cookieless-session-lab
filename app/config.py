@@ -93,7 +93,6 @@ def looker_embed_cold_start_filters() -> dict[str, str]:
 HOST_ACCESS_TOKEN_TTL_SECONDS = 200
 HOST_SESSION_COOKIE = "host_session_id"
 OAUTH_STATE_COOKIE = "oauth_pkce_state"
-LOOKER_MISMATCH_USER_AGENT = "CookielessLab/ua-mismatch"
 
 TOKEN_METHOD_MAP_PATH = ROOT_DIR / "docs" / "token-method-map.json"
 SEQUENCE_DIAGRAM_PATH = ROOT_DIR / "docs" / "sequence-happy-path.mmd"

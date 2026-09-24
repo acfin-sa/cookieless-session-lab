@@ -6,7 +6,6 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from looker_sdk.error import SDKError
 
-from config import LOOKER_MISMATCH_USER_AGENT
 from services.host_session_auth import require_bearer_session, request_user_agent
 from services.events import log_event
 from services import looker_client
@@ -31,8 +30,6 @@ def log_generate_http_result(session, payload: dict) -> None:
     summary = (
         "freeze_token_refresh is on — returned existing nav/api tokens; Looker was not called"
     )
-    if session.force_user_agent_mismatch:
-        summary += " (User-Agent mismatch was not sent; freeze wins)"
     log_event(
         session,
         method="PUT /api/looker/generate-embed-tokens",
@@ -108,7 +105,7 @@ def looker_http_error_response(session, method: str, error: Exception) -> JSONRe
         {
             "detail": detail,
             "looker_status": status,
-            "teaching": "Looker 400s are often User-Agent mismatch, dead tokens, or embed_domain.",
+            "teaching": "Looker 400s are often a changed User-Agent, dead tokens, or embed_domain.",
         },
         status_code=400 if int(status) == 400 else int(status) if int(status) < 500 else 502,
     )
@@ -164,24 +161,7 @@ async def generate_embed_tokens(request: Request):
     # WHY: the iframe is an untrusted peer. It may ask for tokens; it may not mint them
     #      or tell us which session_reference to use. Body nav/api are ignored for identity.
     session = require_bearer_session(request)
-    # Freeze wins: generate returns stored JWTs and never calls Looker, so a
-    # mismatch UA must not be sent or logged as if it were about to fire.
-    if session.freeze_token_refresh:
-        user_agent = request_user_agent(request)
-    elif session.force_user_agent_mismatch:
-        user_agent = LOOKER_MISMATCH_USER_AGENT
-        log_event(
-            session,
-            method="PUT /api/looker/generate-embed-tokens",
-            actor="Host API",
-            summary=f"Force User-Agent mismatch is on. Sending {LOOKER_MISMATCH_USER_AGENT!r} instead of the browser UA.",
-            tokens_in=["host_access_token"],
-            tokens_out=[],
-            ok=True,
-            status_code=200,
-        )
-    else:
-        user_agent = request_user_agent(request)
+    user_agent = request_user_agent(request)
     try:
         payload = await asyncio.to_thread(looker_client.generate_embed_tokens, session, user_agent)
     except LookerSessionDead as error:

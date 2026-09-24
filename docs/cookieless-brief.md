@@ -124,7 +124,8 @@ Reattach (acquire again while the host still holds the reference) ignores
 `session_length` and returns the countdown. `generate_tokens` does the same.
 A response of 775 when the env value is 900 means about 125 seconds have
 already elapsed on that session. End Looker, restart after an `.env` change,
-then acquire with no stored reference to start a new countdown near 900.
+then Start Looker session (a fresh acquire with no stored reference) to start a
+new countdown near 900.
 
 The lifecycle, including that renewal, is drawn in
 [`docs/sequence-looker-token-lifecycle.mmd`](sequence-looker-token-lifecycle.mmd).
@@ -134,7 +135,7 @@ The lifecycle, including that renewal, is drawn in
 Not on their own. Acquire and generate have no field for those TTLs. Looker
 returns about 10 minutes when the session is longer than that. Those tokens
 cannot outlive the session, so a `LOOKER_EMBED_SESSION_LENGTH` below 10 minutes
-caps them. Restart, end Looker, and acquire again. Later generate calls stay
+caps them. Restart, End Looker, then Start Looker session. Later generate calls stay
 inside the time still left on the session reference.
 
 ## Can the browser clock be sped up to simulate expiry?
@@ -193,8 +194,10 @@ API tokens it already holds. The next bearer call gets HTTP 401.
 the next `generate_tokens` fails while Looker TTLs can still be in the future.
 The Embed SDK then shows session interrupted and sends an empty `session:tokens`.
 The observatory stays
-on the last snapshot. Freeze, User-Agent mismatch, Drop session reference, and
-End Looker show an error banner. The page does not send you back to login.
+on the last snapshot. Freeze Looker tokens refresh, Drop session reference, and
+End Looker show an error banner when the request fails. The page does not send
+you back to login. End Looker leaves the embed blank. Start Looker session is
+the next acquire.
 
 ## Does renew mean login again?
 
@@ -212,9 +215,8 @@ reference and does not rewrite the independent navigation/API expiry clocks.
 ## Why does User-Agent matter?
 
 Looker binds cookieless calls to the client context. The lab forwards the
-**current request** User-Agent. A normal browser keeps it stable; the mismatch
-control substitutes a fake value on generate so the failure is visible. That is
-not “always the original login UA.”
+**current request** User-Agent on acquire, generate, and end. A normal browser
+keeps that header stable. That is not “always the original login UA.”
 
 ## What happens with two browsers?
 

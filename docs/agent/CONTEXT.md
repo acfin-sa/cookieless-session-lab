@@ -144,7 +144,6 @@ than assuming them.
 
 - Acquire / generate / end pass `request_user_agent(request)` (current request `User-Agent` header) into `looker-sdk` `transport_options`.
 - Observatory field `looker_bound_user_agent` is **login-time** `HostSession.user_agent` (`build_observatory_snapshot`). Routes do not compare later requests to that stored value.
-- `force_user_agent_mismatch` replaces UA with `LOOKER_MISMATCH_USER_AGENT` (`CookielessLab/ua-mismatch`) on **generate only**, and only when freeze is off. Freeze short-circuits generate (no Looker call), so mismatch is not sent and not logged as if it fired.
 
 MUST NOT document “always the original login UA.”
 
@@ -179,7 +178,7 @@ Expiry of the host JWT alone does not change the page. Effects below require the
 | --- | --- |
 | Embed SDK | `generateTokens` throws on the next `session:tokens:request` (either sibling inside `EXPIRING_WINDOW_SECONDS`). Looker shows its interrupted state. The iframe keeps working until that ask. The SDK then sends an empty `session:tokens`. |
 | Observatory | `poll` catches and `console.warn`s. Cards, gantt, and event log stay on the last snapshot. The 1s `renderCards` / `renderGantt` interval still moves those old clocks. |
-| Controls | Freeze, UA mismatch, drop reference, and End Looker call `showLabError`. Toggles revert. |
+| Controls | Freeze, drop reference, End Looker, and Start Looker session call `showLabError` on failure. The freeze toggle reverts. |
 | Browser-originated events | `reportEvent` `console.warn`s; the row is not stored. |
 | Login | No redirect. The host cookie can still be valid. |
 | Copy event log | `#btn-copy-event-log` copies the in-memory snapshot; it does not call the API. |

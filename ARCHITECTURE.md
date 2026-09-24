@@ -221,8 +221,8 @@ Host and Auth0 bars that outlive the axis end in a chevron.
 | Session-reference bar stops early | End Looker, or Looker reported TTL 0. |
 
 The iframe row uses the session-reference end while generate can still rotate
-tokens. With freeze or a forced User-Agent mismatch, that row ends at the
-current navigation and API expiries, because the next rotate will not happen.
+tokens. With Freeze Looker tokens refresh, that row ends at the current
+navigation and API expiries, because the next rotate will not happen.
 
 History is `HostSession.looker_token_spans` (issued, expires, closed; no token
 secrets). Closing a span as `refreshed` is generate. `replaced` is a later
@@ -234,9 +234,13 @@ the same single-use window after it has been used.
 
 Looker binds a cookieless session to client context. A different User-Agent on
 generate commonly produces HTTP 400. The lab forwards the **current request**
-User-Agent; the mismatch control is generate-only and does not mean “always the
-login UA.” Acquire sends `APP_BASE_URL` as `embed_domain`. The same origin must
-be accepted by Looker.
+User-Agent on acquire, generate, and end. That is not “always the login UA.”
+Acquire sends `APP_BASE_URL` as `embed_domain`. The same origin must be accepted
+by Looker.
+
+**End Looker session** deletes Layer B and leaves the embed blank. **Start Looker
+session** is the next acquire and Embed SDK connect. Ending the session does not
+start another one.
 
 ## What `session:expired` means
 

@@ -1122,9 +1122,6 @@ export function bindObservatory(elements) {
       if (elements.freeze) {
         elements.freeze.checked = Boolean(snapshot.flags?.freeze_token_refresh);
       }
-      if (elements.userAgentMismatchToggle) {
-        elements.userAgentMismatchToggle.checked = Boolean(snapshot.flags?.force_user_agent_mismatch);
-      }
     } catch (error) {
       console.warn("Observatory snapshot poll failed", error);
     } finally {

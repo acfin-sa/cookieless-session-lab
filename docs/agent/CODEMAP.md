@@ -9,7 +9,7 @@ Invariants: [INVARIANTS.md](INVARIANTS.md).
 | Path | Owns |
 | --- | --- |
 | `app/web.py` | FastAPI app, SessionMiddleware (`oauth_pkce_state`, `max_age=600`), `/health` (`health_check`) |
-| `app/config.py` | Env + hardcoded `HOST_ACCESS_TOKEN_TTL_SECONDS`, `LOOKER_MISMATCH_USER_AGENT`, `APP_KEY_SECRET` |
+| `app/config.py` | Env + hardcoded `HOST_ACCESS_TOKEN_TTL_SECONDS`, `APP_KEY_SECRET` |
 | `app/routes/auth0.py` | `GET /login`, `/callback`, `POST /logout` |
 | `app/routes/host.py` | `POST /api/host/bootstrap`, `/refresh` |
 | `app/routes/looker.py` | Layer B HTTP: acquire / generate / end; `browser_safe_looker_payload` strip; generate freeze/failure logs |
@@ -61,7 +61,7 @@ Acquire / generate / end implementation: `app/routes/looker.py` + `app/services/
 
 `HostSession` keyed by `host_session_id`. `SessionStore._sessions_by_id`. Singleton `session_store`. Methods: `save`, `get`, `delete`. No `sub` index.
 
-Relevant fields: Auth0 tokens + claims; host JWT + `jti`; Looker four tokens + TTLs; `looker_token_spans` (issued/expires/closed for those four ids, no secrets — swimlane history); flags `freeze_token_refresh`, `force_user_agent_mismatch`, `session_reference_dropped`, `looker_session_revoked`, `host_session_revoked`; Embed SDK iframe started/expired; `user_agent` (login); `events`; `refresh_markers`.
+Relevant fields: Auth0 tokens + claims; host JWT + `jti`; Looker four tokens + TTLs; `looker_token_spans` (issued/expires/closed for those four ids, no secrets — swimlane history); flags `freeze_token_refresh`, `session_reference_dropped`, `looker_session_revoked`, `host_session_revoked`; Embed SDK iframe started/expired; `user_agent` (login); `events`; `refresh_markers`.
 
 ## Config knobs
 
@@ -73,7 +73,6 @@ Relevant fields: Auth0 tokens + claims; host JWT + `jti`; Looker four tokens + T
 | `HOST_ACCESS_TOKEN_TTL_SECONDS` | `app/config.py` **hardcoded 200** | not `.env` |
 | `APP_KEY_SECRET` | `.env` | HS256 host JWT + SessionMiddleware |
 | `HOST_SESSION_COOKIE_MAX_AGE` | `host_session_auth.py` 12h | opaque cookie |
-| `LOOKER_MISMATCH_USER_AGENT` | `config.py` | generate-only teaching UA |
 | `APP_BASE_URL` | `.env` | callbacks, `embed_domain`, cookie Secure |
 | `MERMAID_MODULE_URL` | `.env` / `config.py` default pinned 11.17.2 | `/sequence` ESM import; not a floating `@11` tag |
 
@@ -85,4 +84,4 @@ Auth0 token TTLs are tenant settings, not lab env.
 
 Swimlane: `renderGantt` in `app/static/js/src/observatory.js`, fed by `looker_token_spans` and `looker_refresh_window_seconds` from `build_observatory_snapshot`.
 
-Controls: `#toggle-freeze`, `#toggle-user-agent-mismatch`, `#btn-drop-session-reference`, `#btn-end-looker`.
+Controls: `#toggle-freeze` (Freeze Looker tokens refresh), `#btn-drop-session-reference`, `#btn-end-looker` (End Looker session, then Start Looker session). End disconnects the embed. Start is the next acquire.

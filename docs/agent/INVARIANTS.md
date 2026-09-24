@@ -67,8 +67,7 @@ Lifecycle and trust-boundary detail: [CONTEXT.md](CONTEXT.md). File/route map: [
 
 ## User-Agent
 
-- MUST forward the **current request** UA (`request_user_agent`) on acquire, generate, and end, except:
-- MUST send `LOOKER_MISMATCH_USER_AGENT` on generate only when `force_user_agent_mismatch` is true **and** `freeze_token_refresh` is false. Freeze wins: no Looker call, no mismatch UA.
+- MUST forward the **current request** UA (`request_user_agent`) on acquire, generate, and end.
 - MUST NOT claim generate always uses the login-time `HostSession.user_agent`.
 - MUST NOT confuse observatory `looker_bound_user_agent` (login snapshot) with the UA sent to Looker.
 
@@ -82,6 +81,7 @@ Lifecycle and trust-boundary detail: [CONTEXT.md](CONTEXT.md). File/route map: [
 ## Embed client
 
 - The only Looker iframe client is the Embed SDK (`embed-sdk-tab.js` `initCookieless`).
+- End Looker deletes Layer B and leaves the embed disconnected. The next acquire is the **Start Looker session** button. MUST NOT remount the Embed SDK as part of End Looker.
 - MUST NOT send `session_reference_token` on `session:tokens`.
 - Looker sends `session:tokens:request` on its own (load, then either nav or api inside its last 60s). The host does not poll for that ask.
 - MUST implement acquire and generate callbacks. The Embed SDK does not call Looker's generate API.

@@ -92,15 +92,14 @@ Manual `/lab` checks:
 
 1. Login → `/lab`; constellation shows Layer A; acquire fills Layer B without `session_reference_token` in network JSON.
 2. The Embed SDK dashboard loads.
-3. Freeze on → generate 200 `frozen: true`; nav/api clocks continue.
-4. UA mismatch on → next generate Looker 400 in event log; acquire still uses request UA.
-5. Drop session_reference → later generate 409 `SESSION_DEAD`.
-6. End Looker → Layer A remains; Layer B cleared.
-7. Logout → this cookie/session gone; do not expect other browsers’ HostSessions gone.
-8. `/sequence` still matches `docs/sequence-happy-path.mmd` (Embed SDK happy path).
-9. If token-moving methods changed, `/lab` catalog matches `docs/token-method-map.json`.
-10. If routes, tokens, or token-moving methods changed: token-method-map, INVARIANTS, CODEMAP, and CONTEXT match the code. Human docs were not used as a second full inventory.
-11. Swimlane: `authentication_token` is its returned single-use window (~30s) with a tick at `/login/embed`; each `navigation_token` and `api_token` generation keeps its returned window and a hatch on the last 60s; `session_reference_token` stays one bar from acquire through `generate_tokens`.
+3. Freeze Looker tokens refresh on → generate 200 `frozen: true`; nav/api clocks continue.
+4. Drop session_reference → later generate 409 `SESSION_DEAD`.
+5. End Looker → Layer A remains; Layer B cleared; the embed stays blank. Start Looker session acquires and connects again.
+6. Logout → this cookie/session gone; do not expect other browsers’ HostSessions gone.
+7. `/sequence` still matches `docs/sequence-happy-path.mmd` (Embed SDK happy path).
+8. If token-moving methods changed, `/lab` catalog matches `docs/token-method-map.json`.
+9. If routes, tokens, or token-moving methods changed: token-method-map, INVARIANTS, CODEMAP, and CONTEXT match the code. Human docs were not used as a second full inventory.
+10. Swimlane: `authentication_token` is its returned single-use window (~30s) with a tick at `/login/embed`; each `navigation_token` and `api_token` generation keeps its returned window and a hatch on the last 60s; `session_reference_token` stays one bar from acquire through `generate_tokens`.
 
 ## Architecture page live TTLs
 

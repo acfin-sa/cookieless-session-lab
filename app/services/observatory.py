@@ -281,7 +281,6 @@ def build_observatory_snapshot(session: HostSession) -> dict[str, Any]:
         },
         "flags": {
             "freeze_token_refresh": session.freeze_token_refresh,
-            "force_user_agent_mismatch": session.force_user_agent_mismatch,
             "session_reference_dropped": session.session_reference_dropped,
             "looker_session_revoked": session.looker_session_revoked,
             "any_iframe_session_expired": session.any_iframe_session_expired(),

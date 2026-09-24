@@ -25,16 +25,12 @@
     </header>
 
     <section class="controls" id="lab-controls">
-        <label class="toggle" title="Next generate_tokens returns the same nav/api JWTs (no Looker call). The iframe keeps working until those JWTs expire. Acquire and host refresh are unchanged. While this is on, User-Agent mismatch cannot fire.">
+        <label class="toggle" title="Stops rotation of navigation_token and api_token. generate_tokens returns those same JWTs and does not call Looker. Their clocks keep running, so the embed stops when they expire. The Looker session countdown and host JWT refresh are unchanged.">
             <input type="checkbox" id="toggle-freeze" />
-            Freeze token refresh
-        </label>
-        <label class="toggle" title="Next generate_tokens that actually calls Looker (freeze must be off) sends a fake User-Agent. Looker returns 400. Acquire is unchanged. Takes effect when the iframe asks to rotate, about 60s before nav/api expiry.">
-            <input type="checkbox" id="toggle-user-agent-mismatch" />
-            Force User-Agent mismatch
+            Freeze Looker tokens refresh
         </label>
         <button type="button" title="Forget the host copy of session_reference_token. Looker still has the session until its TTL. Later generate_tokens returns 409 SESSION_DEAD. Layer A stays logged in. Nav/api clocks are unchanged until they expire." id="btn-drop-session-reference">Drop session_reference on server</button>
-        <button type="button" title="DELETE the Looker cookieless session and clear Layer B tokens on the host. Layer A (Auth0 HostSession) stays. The iframe cannot refresh until you acquire again." id="btn-end-looker">End Looker session</button>
+        <button type="button" id="btn-end-looker">End Looker session</button>
     </section>
 
     <div class="lab-split">

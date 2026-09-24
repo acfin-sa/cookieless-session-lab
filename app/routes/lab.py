@@ -76,27 +76,15 @@ async def update_lab_controls(request: Request):
         session.freeze_token_refresh = bool(body["freeze_token_refresh"])
         log_event(
             session,
-            method="Freeze token refresh",
+            method="Freeze Looker tokens refresh",
             actor="Browser",
             summary=f"freeze_token_refresh={session.freeze_token_refresh}",
             tokens_in=["navigation_token", "api_token"],
             tokens_out=[],
             ok=True,
         )
-    if "force_user_agent_mismatch" in body:
-        session.force_user_agent_mismatch = bool(body["force_user_agent_mismatch"])
-        log_event(
-            session,
-            method="Force User-Agent mismatch",
-            actor="Browser",
-            summary=f"force_user_agent_mismatch={session.force_user_agent_mismatch}",
-            tokens_in=["session_reference_token"],
-            tokens_out=[],
-            ok=True,
-        )
     return {
         "freeze_token_refresh": session.freeze_token_refresh,
-        "force_user_agent_mismatch": session.force_user_agent_mismatch,
         "session_reference_dropped": session.session_reference_dropped,
     }
 

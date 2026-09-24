@@ -132,6 +132,29 @@ function startEmbed() {
   startEmbedSdkTab(pageConfig);
 }
 
+let lookerEmbedConnected = false;
+
+function showLookerSessionButton(connected) {
+  lookerEmbedConnected = connected;
+  const button = requireElement("btn-end-looker");
+  if (connected) {
+    button.textContent = "End Looker session";
+    button.title =
+      "Delete the Looker cookieless session and clear Layer B tokens on the host. Auth0 login stays. The embed stays blank until you start a Looker session.";
+    return;
+  }
+  button.textContent = "Start Looker session";
+  button.title = "Acquire a new Looker cookieless session and connect the Embed SDK.";
+}
+
+function showEmbedWaitingForStart() {
+  const root = document.getElementById("embed-sdk-root");
+  if (!root) {
+    return;
+  }
+  root.textContent = "Looker session ended. Start Looker session to acquire and connect the embed.";
+}
+
 function formatPageElapsed(totalSeconds) {
   const total = Math.max(0, Math.floor(totalSeconds));
   const hours = Math.floor(total / 3600);
@@ -164,7 +187,6 @@ function initLabUi() {
     eventLogCopy: requireElement("btn-copy-event-log"),
     catalog: requireElement("method-catalog"),
     freeze: requireElement("toggle-freeze"),
-    userAgentMismatchToggle: requireElement("toggle-user-agent-mismatch"),
   });
 
   async function postLabControl(body, revert) {
@@ -189,13 +211,6 @@ function initLabUi() {
     });
   });
 
-  onElementEvent("toggle-user-agent-mismatch", "change", async (event) => {
-    const checked = event.target.checked;
-    await postLabControl({ force_user_agent_mismatch: checked }, () => {
-      event.target.checked = !checked;
-    });
-  });
-
   onElementEvent("btn-drop-session-reference", "click", async () => {
     try {
       await fetchWithHostAccessToken("/api/lab/drop-session-reference", { method: "POST" });
@@ -206,10 +221,21 @@ function initLabUi() {
   });
 
   onElementEvent("btn-end-looker", "click", async () => {
+    if (!lookerEmbedConnected) {
+      try {
+        startEmbed();
+        showLookerSessionButton(true);
+        await observatory.poll();
+      } catch (error) {
+        showLabError(`Start Looker session failed: ${error.message}`);
+      }
+      return;
+    }
     try {
       await fetchWithHostAccessToken("/api/looker/end-embed-session", { method: "POST" });
       stopEmbedSdkTab();
-      startEmbed();
+      showEmbedWaitingForStart();
+      showLookerSessionButton(false);
       await observatory.poll();
     } catch (error) {
       showLabError(`End Looker session failed: ${error.message}`);
@@ -233,6 +259,7 @@ async function main() {
   try {
     initLabUi();
     startEmbed();
+    showLookerSessionButton(true);
   } catch (error) {
     console.warn("[lab] UI init failed", error.message);
     showLabError(`Lab UI failed to initialize: ${error.message}`);

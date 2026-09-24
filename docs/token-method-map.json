@@ -38,7 +38,7 @@
       "layer": "B",
       "badge": "Looker",
       "storage": "URL-once",
-      "purpose": "Single-use /login/embed bootstrap. Stored in URL. Default Looker TTL is about 30 seconds."
+      "purpose": "Single-use /login/embed bootstrap."
     },
     {
       "id": "navigation_token",
@@ -46,7 +46,7 @@
       "layer": "B",
       "badge": "Looker",
       "storage": "iframe / URL",
-      "purpose": "In-iframe navigation JWT stored in iframe / URL. Looker TTL is about 10 minutes. Looker asks in the last 60 seconds of this token or of api_token."
+      "purpose": "In-iframe navigation JWT stored in iframe / URL. TTL defined by Looker of about 10 minutes. Rotated by generate_tokens()."
     },
     {
       "id": "api_token",
@@ -54,7 +54,7 @@
       "layer": "B",
       "badge": "Looker",
       "storage": "iframe",
-      "purpose": "Iframe Looker API JWT, stored in iframe. Looker TTL is about 10 minutes, on its own exp. generate_tokens rotates it together with navigation_token."
+      "purpose": "Looker API JWT, stored in iframe. TTL defined by Looker of about 10 minutes. Rotated by generate_tokens()."
     }
   ],
   "methods": [

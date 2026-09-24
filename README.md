@@ -88,15 +88,13 @@ The sequence is the Embed SDK happy path. It is not a failure matrix.
 
 ## Ten-minute demo
 
-1. Keep `LOOKER_EMBED_SESSION_LENGTH=720` in `.env` for a viewable 12-minute session. That file overrides the fallback in `app/config.py`. Restart after changing it, then end Looker and acquire again; an existing session keeps the TTL Looker already returned. Navigation and API tokens are about 10 minutes unless this session is shorter, which caps them. Moving the browser clock does not expire any of these tokens.
+1. Keep `LOOKER_EMBED_SESSION_LENGTH=720` in `.env` for a viewable 12-minute session. That file overrides the fallback in `app/config.py`. Restart after changing it, then End Looker and Start Looker session; an existing session keeps the TTL Looker already returned. Navigation and API tokens are about 10 minutes unless this session is shorter, which caps them. Moving the browser clock does not expire any of these tokens.
 2. Log in. The Embed SDK dashboard loads beside the observatory.
 3. On the lifetime swimlane, read the four Looker bars: authentication about 30 seconds, navigation and API about 10 minutes, session reference the full 12 minutes. An amber line in the hatched last 60 seconds is `generate_tokens`. The host JWT renews on its own lane. If the Embed SDK tab instead dies near 8:38 on the page timer with no amber line, that is the Embed SDK generate gate in [ARCHITECTURE.md](ARCHITECTURE.md).
-4. Turn on **Freeze token refresh** and let the short-lived Looker tokens age.
-5. Turn freeze off, reacquire if needed, then enable **Force User-Agent
-  mismatch** to make the next Looker generate call fail.
-6. Use **Drop session_reference on server** to simulate lost BFF state.
-7. Use **End Looker session** to end Layer B while Layer A remains logged in.
-8. Log out to delete the current browser's HostSession and clear its cookie.
+4. Turn on **Freeze Looker tokens refresh** and let `navigation_token` and `api_token` age. Their clocks keep running; generate does not replace them.
+5. Use **Drop session_reference on server** to simulate lost BFF state.
+6. Use **End Looker session** to end Layer B while Layer A remains logged in. The embed stays blank. **Start Looker session** acquires and connects again.
+7. Log out to delete the current browser's HostSession and clear its cookie.
 
 The method catalog in `/lab` comes from
 `[docs/token-method-map.json](docs/token-method-map.json)`. Host sessions are

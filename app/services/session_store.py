@@ -86,7 +86,6 @@ class HostSession:
     looker_api_token_expires_at: datetime | None = None
 
     freeze_token_refresh: bool = False
-    force_user_agent_mismatch: bool = False
     session_reference_dropped: bool = False
     session_reference_dropped_at: datetime | None = None
     looker_session_revoked: bool = False
