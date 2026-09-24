@@ -92,8 +92,9 @@ still has time. The swimlane shows no new navigation or API bar and no amber
 line.
 
 Send the seconds still left, or generate and push new tokens before the gate.
-This lab does both: it rewrites the cached TTLs every second, and with 180
-seconds left it calls generate and pushes `session:tokens` into the iframe.
+This lab sets that gate during acquire, 150 seconds before the navigation and
+API TTLs, and rotates there. The first token request leaves the gate in place
+because the SDK assigns it only while `generateTokensTime` is still 0.
 
 ## Can the session reference be refreshed?
 

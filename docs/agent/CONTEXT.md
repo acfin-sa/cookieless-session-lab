@@ -213,9 +213,10 @@ Setting `generateTokensTime` to the past and waiting for the next ask does not h
 
 `app/static/js/src/embed-sdk-tab.js`:
 
-- `rememberCookielessIssuance` stores the acquire or generate TTLs and `Date.now()`.
-- `syncCookielessRemainingTtls` (1s) writes remaining seconds onto `embedSdk._cookielessSession`. Replying with those values tells Looker the truth.
-- When `min(api, navigation)` remaining is in `(0, 180]`, `proactivelyGenerateTokens` calls `generateTokens`, writes the result onto `_cookielessSession`, and `embedConnection.send("session:tokens", ...)` pushes it. Constant: `PROACTIVE_GENERATE_REMAINING_SECONDS`. Opening the SDK gate and waiting for the next ask is not enough: that ask is the interrupt.
+- `rememberCookielessIssuance` stores the acquire or generate TTLs and `Date.now()`, then `armIframeTokenRotation`.
+- That arms `generateTokensTime` to 150s before the soonest of `api_token` and `navigation_token` (`ROTATION_LEAD_SECONDS`), while `initCookieless` is still inside acquire and the first `session:tokens:request` has not run. The first ask therefore does not replace the gate: `updateGenerateTokensTime` is true only when `generateTokensTime === 0`.
+- A timeout at that same instant calls `generateTokens` and pushes `session:tokens`. Looker's ask is about 30s later (120s before the TTL it was told). `Date.now() > generateTokensTime` is already true, so the SDK calls `generateTokens` too.
+- `syncCookielessRemainingTtls` (1s) writes remaining seconds onto `embedSdk._cookielessSession` and re-pins the gate. After a generate that the SDK itself started, EmbedClientEx sets the next gate back to `ttl - 120`. `setTimeout(pinGenerateTokensTime, 0)` puts it back to the 150s lead.
 - `generateTokens` calls `PUT /api/looker/generate-embed-tokens`. Failure is `reportEvent` with `ok: false`. The SDK then sends an empty `session:tokens`, and Looker shows interrupted.
 - `app/routes/lab.py` `record_client_event` records refresh marker `embed session interrupted` on that failure and on `session:expired` / expired `session:status`. The swimlane draws it in red on the Looker lane.
 

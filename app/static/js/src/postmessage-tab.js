@@ -127,9 +127,8 @@ async function handleLookerIframeMessage(event) {
     const tokens = await fetchWithHostAccessToken("/api/looker/generate-embed-tokens", {
       method: "PUT",
       body: "{}",
-      signal: embedAbortController?.signal,
     });
-    if (mountGeneration !== currentMountGeneration || !rawIframe) {
+    if (!rawIframe) {
       return;
     }
     browserHeldEmbedTokens = { ...browserHeldEmbedTokens, ...tokens };

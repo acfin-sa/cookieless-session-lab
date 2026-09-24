@@ -158,15 +158,17 @@ never called `generate_tokens`. The session reference is still counting down.
 The swimlane stays one navigation bar, one API bar, and no amber line.
 
 Read it on the page timer as **first token request + 8:00**. When that first
-request is about 39 seconds after load, the timer reads **8:39**. The
+request is about 38 seconds after load, the timer reads **8:38**. The
 navigation and API JWTs still have about two minutes at that moment.
 
 A later reply must carry the seconds still left, unless it is the fresh result
 of generate. Waiting for the ask and only then opening the gate is too late:
-that ask is the interrupt. This lab rewrites the cached TTLs to remaining time
-every second and, with 180 seconds left, calls generate and pushes the new
-tokens into the iframe. A failed generate or an interrupted iframe draws a red
-line on the Looker lane.
+that ask is the interrupt. This lab sets the SDK gate during acquire, 150
+seconds before the navigation and API TTLs Looker just returned, and rotates
+at that time. The first token request does not move the gate, because the SDK
+only assigns it when `generateTokensTime` is still 0. The ask then finds the
+gate already open and `generate_tokens` runs. A failed generate or an
+interrupted iframe draws a red line on the Looker lane.
 
 ## Acquire, renew, and login are different operations
 
