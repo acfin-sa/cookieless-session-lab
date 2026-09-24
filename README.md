@@ -1,7 +1,6 @@
 # Cookieless Looker session lab
 
-This repository is a teaching lab, not a production application. It shows how an
-Auth0 host session can safely support a Looker embed when third-party Looker
+This repository shows how an Auth0 host session can safely support a Looker embed when third-party Looker
 cookies are unavailable.
 
 It is for developers evaluating cookieless embed, debugging token renewal, or
@@ -9,15 +8,14 @@ extracting the pattern into an existing application.
 
 ## The idea
 
-An embedded Looker iframe is cross-site, so browsers may block its session
-cookie. Cookieless embed replaces that cookie dependency with short-lived tokens
-issued through the host server.
+Cookieless embed replaces that cookie dependency with short-lived tokens
+issued through the host server, allowing the correct functioning of the cross-site embedded Looker iframe.
 
 - **Layer A — host:** Auth0 proves the user and the host creates a server-side
-  `HostSession`. The short-lived `host_access_token` is a **host** JWT that
-  gates Looker host routes; it is not Looker's `api_token`.
+`HostSession`. The short-lived `host_access_token` is a **host** JWT that
+gates Looker host routes; it is not Looker's `api_token`.
 - **Layer B — Looker:** the authenticated host acquires a Looker cookieless
-  session and renews its iframe tokens.
+session and renews its iframe tokens.
 
 Long-lived and identity-bearing tokens stay on the server. The browser receives
 an opaque `HttpOnly` cookie, a short-lived host JWT in memory, and only the
@@ -26,10 +24,10 @@ Looker tokens needed by the iframe.
 Read [ARCHITECTURE.md](ARCHITECTURE.md) for the design method and
 [the cookieless brief](docs/cookieless-brief.md) for a concise Q&A.
 
-| Question | Read |
-| --- | --- |
-| Why it works, which approach, trade-offs | this README, ARCHITECTURE, the brief |
-| Parameters, routes, tokens, procedures | [CONTEXT](docs/agent/CONTEXT.md), [CODEMAP](docs/agent/CODEMAP.md), [token-method-map.json](docs/token-method-map.json) |
+| Question                                 | Read                                                                                                                    |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Why it works, which approach, trade-offs | this README, ARCHITECTURE, the brief                                                                                    |
+| Parameters, routes, tokens, procedures   | [CONTEXT](docs/agent/CONTEXT.md), [CODEMAP](docs/agent/CODEMAP.md), [token-method-map.json](docs/token-method-map.json) |
 
 Coding tools should start at [AGENTS.md](AGENTS.md) — see
 [Instructing an agent](#instructing-an-agent).
@@ -54,12 +52,12 @@ setup. Fill
 
 Required values:
 
-| Area | Values |
-| --- | --- |
-| Host | `APP_BASE_URL`, a long random `APP_KEY_SECRET` |
-| Auth0 | `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET` |
+| Area       | Values                                                        |
+| ---------- | ------------------------------------------------------------- |
+| Host       | `APP_BASE_URL`, a long random `APP_KEY_SECRET`                |
+| Auth0      | `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`      |
 | Looker API | `LOOKER_BASE_URL`, `LOOKER_CLIENT_ID`, `LOOKER_CLIENT_SECRET` |
-| Embed | `LOOKER_EMBED_HOST`, `LOOKER_EMBED_DASHBOARD_ID` |
+| Embed      | `LOOKER_EMBED_HOST`, `LOOKER_EMBED_DASHBOARD_ID`              |
 
 For Looker Cloud, use `https://<instance>.cloud.looker.com` without port `19999`.
 The remaining embed grants and the 720-second demo session are documented in
@@ -78,13 +76,13 @@ Secret merely to run this lab; doing so invalidates live sessions.
 
 ## Open these URLs
 
-| URL | Purpose |
-| --- | --- |
-| `http://localhost:3000` | Sign in |
-| `http://localhost:3000/lab` | Interactive session observatory |
-| `http://localhost:3000/architecture` | Rendered architecture guide |
-| `http://localhost:3000/sequence` | Embed SDK happy-path sequence |
-| `http://localhost:3000/health` | Local smoke ping (`APP_BASE_URL`, cookie Secure flag) |
+| URL                                  | Purpose                                               |
+| ------------------------------------ | ----------------------------------------------------- |
+| `http://localhost:3000`              | Sign in                                               |
+| `http://localhost:3000/lab`          | Interactive session observatory                       |
+| `http://localhost:3000/architecture` | Rendered architecture guide                           |
+| `http://localhost:3000/sequence`     | Embed SDK happy-path sequence                         |
+| `http://localhost:3000/health`       | Local smoke ping (`APP_BASE_URL`, cookie Secure flag) |
 
 The sequence is the Embed SDK happy path. It is not a failure matrix.
 
@@ -95,13 +93,13 @@ The sequence is the Embed SDK happy path. It is not a failure matrix.
 3. On the lifetime swimlane, read the four Looker bars: authentication about 30 seconds, navigation and API about 10 minutes, session reference the full 12 minutes. An amber line in the hatched last 60 seconds is `generate_tokens`. The host JWT renews on its own lane. If the Embed SDK tab instead dies near 8:38 on the page timer with no amber line, that is the Embed SDK generate gate in [ARCHITECTURE.md](ARCHITECTURE.md).
 4. Turn on **Freeze token refresh** and let the short-lived Looker tokens age.
 5. Turn freeze off, reacquire if needed, then enable **Force User-Agent
-   mismatch** to make the next Looker generate call fail.
+  mismatch** to make the next Looker generate call fail.
 6. Use **Drop session_reference on server** to simulate lost BFF state.
 7. Use **End Looker session** to end Layer B while Layer A remains logged in.
 8. Log out to delete the current browser's HostSession and clear its cookie.
 
 The method catalog in `/lab` comes from
-[`docs/token-method-map.json`](docs/token-method-map.json). Host sessions are
+`[docs/token-method-map.json](docs/token-method-map.json)`. Host sessions are
 in process memory, so restarting the app intentionally clears both layers.
 
 ## Instructing an agent
@@ -111,13 +109,13 @@ not a second architecture essay.
 
 Have the agent read, in order:
 
-1. [`docs/agent/CONTEXT.md`](docs/agent/CONTEXT.md) — trust boundaries and token lifecycle
-2. [`docs/agent/INVARIANTS.md`](docs/agent/INVARIANTS.md) — MUST / MUST NOT
-3. [`docs/agent/CODEMAP.md`](docs/agent/CODEMAP.md) — files, routes, symbols
-4. [`docs/agent/CHANGEPLAYBOOK.md`](docs/agent/CHANGEPLAYBOOK.md) — safe edits and `/lab` checks
+1. `[docs/agent/CONTEXT.md](docs/agent/CONTEXT.md)` — trust boundaries and token lifecycle
+2. `[docs/agent/INVARIANTS.md](docs/agent/INVARIANTS.md)` — MUST / MUST NOT
+3. `[docs/agent/CODEMAP.md](docs/agent/CODEMAP.md)` — files, routes, symbols
+4. `[docs/agent/CHANGEPLAYBOOK.md](docs/agent/CHANGEPLAYBOOK.md)` — safe edits and `/lab` checks
 
 When a change moves tokens or routes, say so explicitly and require
-[`docs/token-method-map.json`](docs/token-method-map.json) plus the invariants
+`[docs/token-method-map.json](docs/token-method-map.json)` plus the invariants
 to stay in sync with the code. CONTEXT, INVARIANTS, and CODEMAP are the
 structured sources; do not ask the agent to treat this README, ARCHITECTURE, or
 the brief as a second full inventory.

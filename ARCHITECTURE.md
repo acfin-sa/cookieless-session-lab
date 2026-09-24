@@ -57,21 +57,18 @@ authorization for protected BFF routes. Auth0 tokens and
 
 ## Lifetimes teach the nesting
 
-Repository defaults used by this lab: host JWT **200** s
-(`HOST_ACCESS_TOKEN_TTL_SECONDS` in `app/config.py`, not `.env`) and Looker
-session length **720** s (`LOOKER_EMBED_SESSION_LENGTH`). The opaque host cookie
-lasts hours so Layer A can outlive many Looker sessions. Auth0 durations come
-from the tenant. Looker returns the individual authentication / navigation /
-API / session-reference TTLs; the UI follows those values.
+Repository defaults used by this lab:
 
-`navigation_token` and `api_token` are siblings, not aliases: usually minted
-together, each with its own clock. Neither one is the embed session.
+- host JWT **200** s (`HOST_ACCESS_TOKEN_TTL_SECONDS` in `app/config.py`, not `.env`)
+- Looker session length **720** s (`LOOKER_EMBED_SESSION_LENGTH`).
+
+Looker returns the individual authentication / navigation / API / session-reference TTLs; the UI follows those values.
+
+`navigation_token` and `api_token` are siblings, not aliases: usually minted together, each with its own clock. Neither one is the embed session.
 
 ### Looker cookieless contract
 
-These are the four tokens from `acquire_embed_cookieless_session`. Usual
-Looker lifetimes are below. A given response can differ; the UI follows the
-TTLs Looker returned.
+These are the four tokens from `acquire_embed_cookieless_session`. Usual Looker lifetimes:
 
 | Token | Usual lifetime | Who holds it | What ends it |
 | --- | --- | --- | --- |
@@ -80,32 +77,16 @@ TTLs Looker returned.
 | `api_token` | about 10 minutes | Iframe | Its own `exp`, then `generate_tokens` replaces it |
 | `session_reference_token` | `session_length` (lab default 720 s) | Server only | TTL 0, End Looker, or logout |
 
+- `authentication_token` is single-use on `/login/embed`. It is marked as consumed when the iframe reaches that URL.
 - `navigation_token` authorizes movement inside the embed.
-- `api_token` authorizes
-Looker API calls the iframe makes. They are sibling JWTs. Acquire and generate
-usually mint them together. Each response still carries its own TTL, so the
-clocks can diverge. Neither one is the embed session.
+- `api_token` authorizes Looker API calls the iframe makes.
+- `session_reference_token` is that LOOKER EMBED session. It cannot be refreshed.
 
-Neither request can ask Looker for a shorter navigation or API lifetime. With
-a session longer than about 10 minutes, Looker returns about 10 minutes. Those
-tokens cannot outlive the session, so a shorter `LOOKER_EMBED_SESSION_LENGTH`
-caps both of them, including tokens from later `generate_tokens` calls.
+`navigation_token` and `api_token` are sibling JWTs. Acquire and generate mint them together. Each response still carries its own TTL, so the clocks could potentially diverge.
+They cannot outlive the session, so a shorter `LOOKER_EMBED_SESSION_LENGTH` caps both of them.
+Neither request can ask Looker for a shorter navigation or API lifetime.
 
-`session_reference_token` is that session. It cannot be refreshed.
-`generate_tokens` returns the remaining `session_reference_token_ttl` and leaves
-the original countdown in place. A replacement reference string, when Looker
-sends one, is stored on the server and does not restart the countdown. Reattach
-(acquire again with the stored reference) mints a new `authentication_token`
-for another iframe and ignores `session_length`. The same session bar continues.
-A new countdown starts only from an acquire that does not send a live
-reference: End Looker, then acquire again.
-
-`session_reference_token_ttl` in a Looker response is seconds still left on
-that session. It is not a copy of `LOOKER_EMBED_SESSION_LENGTH`. Only a fresh
-acquire (no stored reference) asks Looker for `session_length`. Reattach and
-`generate_tokens` return the countdown. A response of 775 when
-`LOOKER_EMBED_SESSION_LENGTH` is 900 means about 125 seconds have already
-elapsed on that session. The lab does not rewrite the number.
+- `generate_tokens` method returns the remaining `session_reference_token_ttl`.
 
 The sequence at
 [`docs/sequence-looker-token-lifecycle.mmd`](docs/sequence-looker-token-lifecycle.mmd)
@@ -119,18 +100,10 @@ fallback while `.env` still says 720 leaves a 12-minute bar. After you change
 draws the TTL Looker returned, not the integer in the file. `/architecture`
 prints the value this process actually loaded.
 
-`authentication_token` is single-use on `/login/embed`. The lab marks it
-consumed when the iframe reaches that URL. `generate_tokens` leaves it
-unchanged. Its whole life is shorter than the navigation/API ask window, so
-the observatory keeps it out of that window's yellow state.
 
 ### When Looker asks for new iframe tokens
 
-Looker, inside the iframe, decides when to ask. The host does not poll Looker
-for this. After the iframe loads it sends `session:tokens:request`. It sends
-that again when either `navigation_token` or `api_token` is inside its last 60
-seconds. The lab paints that window as the hatch
-(`EXPIRING_WINDOW_SECONDS` in `app/services/observatory.py`).
+Looker, inside the iframe, decides when to ask. The host does not poll Looker for this. After the iframe loads it sends `session:tokens:request`. It sends that again when either `navigation_token` or `api_token` is inside its last 60 seconds.
 
 What the host must do on each ask is not automatic:
 
