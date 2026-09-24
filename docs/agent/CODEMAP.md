@@ -29,7 +29,8 @@ Invariants: [INVARIANTS.md](INVARIANTS.md).
 | `app/static/js/src/lab.js` | Tab switch, controls, overlays |
 | `app/static/js/src/observatory.js` | Poll `/api/lab/snapshot`; `#btn-copy-event-log` copies the snapshot event list |
 | `docs/token-method-map.json` | Method catalog + token `badge` (Auth0 / Host / Looker) for constellation |
-| `docs/sequence-happy-path.mmd` | Happy-path postMessage sequence |
+| `docs/sequence-happy-path.mmd` | Happy-path postMessage sequence (`/sequence`) |
+| `docs/sequence-looker-token-lifecycle.mmd` | Four Looker tokens: acquire, one-use authentication, first `session:tokens`, `generate_tokens` renewal, TTL 0, reattach |
 | `scripts/dev.mjs` | venv check, esbuild, uvicorn `--reload` localhost:3000 |
 | `scripts/local.sh` | uvicorn only (not `npm run dev`) |
 | `.env.example` | Placeholders; `LOOKER_EMBED_SESSION_LENGTH=720` |

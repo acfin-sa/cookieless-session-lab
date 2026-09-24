@@ -1,5 +1,5 @@
 import { getEmbedSDK } from "@looker/embed-sdk";
-import { fetchWithHostAccessToken, reportEvent } from "./host-client.js";
+import { fetchWithHostAccessToken, rememberLookerBrowserTokens, reportEvent } from "./host-client.js";
 
 let embedSdk = null;
 let embedConnection = null;
@@ -31,6 +31,7 @@ function normalizeCookielessTokens(tokens) {
 }
 
 function rememberCookielessIssuance(tokens) {
+  rememberLookerBrowserTokens(tokens);
   cookielessIssuedAtMs = Date.now();
   cookielessIssuedTtls = {
     api: numericTtl(tokens.api_token_ttl),

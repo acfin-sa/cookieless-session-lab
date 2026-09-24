@@ -39,10 +39,16 @@ Auth0 refresh, access, and ID tokens stay on the server, as does
 
 ## Why are there two short-lived Looker tokens?
 
-`navigation_token` authorizes movement inside the embed.
-`api_token` authorizes Looker API work performed by the iframe. They are
-siblings under the same session reference, are normally rotated together, and
-have independent returned TTLs.
+`navigation_token` authorizes movement inside the embed (dashboards, looks,
+routes). The raw tab also puts it on the login URL as `embed_navigation_token`.
+
+`api_token` authorizes Looker API work the iframe performs (queries and data).
+It lives in the iframe, delivered by `session:tokens`.
+
+They are siblings under the same session reference, are normally minted and
+rotated together, and have independent returned TTLs. One ask rotates both,
+including the sibling that still had more than 60 seconds left. Neither token
+is the embed session, and neither is the host's `host_access_token`.
 
 ## How long are the four Looker tokens, and when do they refresh?
 
@@ -107,6 +113,22 @@ file overrides the fallback in `app/config.py`. Restart, end the current Looker
 session, and acquire again before the swimlane can show the new length. The bar
 is the TTL Looker returned.
 
+## Why is `session_reference_token_ttl` smaller than `LOOKER_EMBED_SESSION_LENGTH`?
+
+`LOOKER_EMBED_SESSION_LENGTH` is the `session_length` sent on a **fresh**
+acquire, when the server has no stored `session_reference_token`. Looker's
+response field `session_reference_token_ttl` is seconds still left. The lab
+returns that number as Looker sent it.
+
+Reattach (acquire again while the host still holds the reference) ignores
+`session_length` and returns the countdown. `generate_tokens` does the same.
+A response of 775 when the env value is 900 means about 125 seconds have
+already elapsed on that session. End Looker, restart after an `.env` change,
+then acquire with no stored reference to start a new countdown near 900.
+
+The lifecycle, including that renewal, is drawn in
+[`docs/sequence-looker-token-lifecycle.mmd`](sequence-looker-token-lifecycle.mmd).
+
 ## Can navigation and API lifetimes be shortened?
 
 Not on their own. Acquire and generate have no field for those TTLs. Looker
@@ -126,17 +148,53 @@ lifetimes above instead.
 
 ## Why can the embed die while Looker tokens are still valid?
 
-`host_access_token` is the browser's pass to the host API. The page refreshes
-it on a timer, and each success schedules the next refresh. A failed refresh
-does not. Nothing on the page breaks at the moment that JWT expires. The break
-shows up on the next call that needs it, and only if refresh fails too.
+That is a Layer A failure: the host JWT could not be refreshed when Looker next
+asked for iframe tokens. See [What does host refresh do](#what-does-host-refresh-do-and-what-happens-when-the-host-jwt-expires).
 
-The dashboard keeps running on the navigation and API tokens it already holds.
-The next time Looker asks for new ones, generate fails: the Embed SDK surfaces
-Looker's interrupted state, and the raw postMessage tab tells the iframe the
-session TTL is 0. The swimlane, cards, and event log stay on the last snapshot.
-Freeze, User-Agent mismatch, Drop session reference, and End Looker show an
-error banner. The page does not send you back to login.
+## What does `generate_tokens` need?
+
+A valid `host_access_token` bearer, and a `session_reference_token` stored on
+the server. Looker's generate API also receives the last `navigation_token` and
+`api_token` from that server session. The browser sends an empty JSON body.
+`authentication_token` was already used on `/login/embed` and is left unchanged.
+If the session-reference TTL comes back 0, the lab returns HTTP 409
+`SESSION_DEAD`.
+
+## What is a bearer?
+
+The browser sends `Authorization: Bearer <host_access_token>` on Looker and lab
+routes. The server checks that JWT (signature, expiry, and current `jti`). The
+HttpOnly `host_session_id` cookie is separate: it finds the `HostSession` for
+`POST /api/host/bootstrap` and `POST /api/host/refresh`.
+
+## When and why is `host_access_token` minted?
+
+The cookie only names the server session. The host JWT is the short-lived
+authorization for the BFF. Auth0 tokens stay on the server.
+
+| When | What happens |
+| --- | --- |
+| Auth0 callback | First mint, after the `HostSession` is created. |
+| `POST /api/host/bootstrap` on `/lab` load | Mint if the JWT is missing or inside 30 seconds of expiry. Otherwise return the current one. |
+| `POST /api/host/refresh` | Cookie only. Refresh Auth0 on the server when a refresh token exists, then mint a new host JWT. The previous `jti` is dead. |
+
+Each mint lasts `HOST_ACCESS_TOKEN_TTL_SECONDS` (`app/config.py`, not `.env`).
+
+## What does host refresh do, and what happens when the host JWT expires?
+
+`scheduleHostRefresh` in `host-client.js` is one timeout, armed after each
+successful store, for 45 seconds before expiry (minimum wait 5 seconds). It
+calls `POST /api/host/refresh`. Success stores the new JWT and schedules the
+next timeout. Failure logs a warning and does not schedule another attempt.
+
+Expiry alone does not tear down `/lab`. The iframe keeps the navigation and
+API tokens it already holds. The next bearer call gets HTTP 401.
+`fetchWithHostAccessToken` refreshes once and retries. If that refresh fails,
+the next `generate_tokens` fails while Looker TTLs can still be in the future.
+The Embed SDK then shows session interrupted. The raw tab posts
+`session_reference_token_ttl: 0` so the iframe expires. The observatory stays
+on the last snapshot. Freeze, User-Agent mismatch, Drop session reference, and
+End Looker show an error banner. The page does not send you back to login.
 
 ## Does renew mean login again?
 

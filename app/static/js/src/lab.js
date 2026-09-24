@@ -1,4 +1,8 @@
-import { fetchWithHostAccessToken, bootstrapHostSession } from "./host-client.js";
+import {
+  bootstrapHostSession,
+  fetchWithHostAccessToken,
+  printLookerIframeTokens,
+} from "./host-client.js";
 import { bindObservatory, remainingNavigationAndApiSeconds } from "./observatory.js";
 import { startEmbedSdkTab, stopEmbedSdkTab } from "./embed-sdk-tab.js";
 import { startPostMessageTab, stopPostMessageTab } from "./postmessage-tab.js";
@@ -266,6 +270,7 @@ function initLabUi() {
 }
 
 async function main() {
+  globalThis.labPrintLookerIframeTokens = printLookerIframeTokens;
   startPageElapsedTimer();
   try {
     await bootstrapHostSession();

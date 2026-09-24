@@ -1,4 +1,4 @@
-import { fetchWithHostAccessToken, reportEvent } from "./host-client.js";
+import { fetchWithHostAccessToken, rememberLookerBrowserTokens, reportEvent } from "./host-client.js";
 
 let pageConfig = null;
 let browserHeldEmbedTokens = null;
@@ -132,6 +132,7 @@ async function handleLookerIframeMessage(event) {
       return;
     }
     browserHeldEmbedTokens = { ...browserHeldEmbedTokens, ...tokens };
+    rememberLookerBrowserTokens(browserHeldEmbedTokens);
     postSessionTokensToIframe(iframeWindow, browserHeldEmbedTokens);
     await reportRawEvent({
       method: "postMessage session:tokens",
@@ -182,6 +183,7 @@ async function acquireAndMount(container) {
     body: "{}",
   });
   browserHeldEmbedTokens = tokens;
+  rememberLookerBrowserTokens(tokens);
   await reportRawEvent({
     method: "POST /api/looker/acquire-embed-session",
     actor: "Browser",

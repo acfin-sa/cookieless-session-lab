@@ -1,0 +1,64 @@
+%% Looker four-token lifecycle. Renewal is explicit.
+%% session_reference_token stays one countdown. navigation_token and api_token rotate together.
+%% authentication_token is single-use and is not an input to generate_tokens.
+sequenceDiagram
+    autonumber
+    actor Browser
+    participant Host
+    participant Looker as Looker API
+    participant Iframe as Looker iframe
+
+    rect rgb(232, 242, 252)
+    Note over Browser,Looker: Fresh acquire (no stored session_reference_token). Starts the session countdown from session_length (LOOKER_EMBED_SESSION_LENGTH).
+    Browser->>Host: POST /api/looker/acquire-embed-session (Authorization Bearer host_access_token)
+    Host->>Looker: POST /embed/cookieless_session/acquire (session_length)
+    Looker-->>Host: session_reference_token, TTL = session_length
+    Looker-->>Host: authentication_token (~30s, single use)
+    Looker-->>Host: navigation_token and api_token (~10 min each, own exp)
+    Note over Host: Store session_reference_token. Omit the secret from JSON. Return session_reference_token_ttl.
+    Host-->>Browser: authentication_token, navigation_token, api_token, and the four TTLs
+    end
+
+    rect rgb(255, 244, 230)
+    Note over Browser,Iframe: authentication_token ends here. generate_tokens does not mint another one.
+    Browser->>Iframe: GET /login/embed?embed_authentication_token= plus embed_navigation_token
+    Note over Iframe: Looker consumes authentication_token on this navigation. Unused, it dies at its ~30s TTL.
+    end
+
+    rect rgb(232, 248, 236)
+    Note over Iframe,Browser: First session:tokens:request reuses the acquire pair. No generate_tokens call.
+    Iframe->>Browser: session:tokens:request
+    Browser->>Iframe: session:tokens (acquire navigation_token, api_token, remaining session_reference_token_ttl)
+    Note over Browser,Iframe: The message has no session_reference_token.
+    end
+
+    rect rgb(255, 249, 230)
+    Note over Iframe,Looker: Renewal replaces both iframe JWTs. The session countdown keeps running.
+    Note over Iframe: Looker asks again when either sibling is inside its last 60s. This lab's Embed SDK tab calls generate 150s before the sooner TTL and pushes session:tokens before that ask.
+    Browser->>Host: PUT /api/looker/generate-embed-tokens (Bearer host_access_token, empty body)
+    Note over Host: Identity is the server copy of session_reference_token plus the last navigation_token and api_token. authentication_token is not an input.
+    Host->>Looker: PUT /embed/cookieless_session/generate_tokens
+    Looker-->>Host: new navigation_token and new api_token (~10 min, capped by time left on the session)
+    Looker-->>Host: session_reference_token_ttl = seconds still left
+    opt Looker returns a replacement session_reference_token string
+        Note over Host: Store the new string. Keep issued_at. The countdown does not restart.
+    end
+    Host-->>Browser: new navigation_token, new api_token, remaining session_reference_token_ttl
+    Browser->>Iframe: session:tokens
+    end
+
+    rect rgb(255, 232, 232)
+    Note over Browser,Looker: TTL 0 is session death. Generate does not extend the session. A new countdown is a fresh acquire with no stored reference.
+    Looker-->>Host: session_reference_token_ttl = 0
+    Host-->>Browser: HTTP 409 SESSION_DEAD
+    Browser->>Host: POST /api/looker/acquire-embed-session
+    Host->>Looker: acquire with no session_reference_token
+    Looker-->>Host: four new tokens and a new session_length countdown
+    end
+
+    rect rgb(243, 232, 252)
+    Note over Browser,Looker: Reattach is acquire while the stored reference is still live. It does not apply session_length again.
+    Host->>Looker: acquire with the stored session_reference_token
+    Looker-->>Host: new authentication_token, new navigation_token, new api_token, same countdown
+    Note over Host: Response session_reference_token_ttl is seconds still left (for example 775 when session_length was 900 and about 125s have elapsed).
+    end

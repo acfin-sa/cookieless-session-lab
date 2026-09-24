@@ -50,6 +50,26 @@ is minted by `mint_host_access_token` and sent as `Authorization: Bearer` on
 remains `session_reference_token`. Observatory `badge` comes from
 `docs/token-method-map.json`; do not map every Layer A card to the word Auth0.
 
+Bearer means the browser presents that JWT in the `Authorization` header
+(`Bearer <host_access_token>`). The HttpOnly `host_session_id` cookie is a
+different handle: it selects the `HostSession` for bootstrap and refresh. Looker
+and lab routes require the bearer.
+
+Mint happens in three places, always via `mint_host_access_token` in
+`app/services/host_tokens.py`:
+
+1. Auth0 callback, after the `HostSession` is created (`app/routes/auth0.py`).
+2. `POST /api/host/bootstrap` when the current JWT is missing or inside 30
+   seconds of expiry. Otherwise bootstrap returns the existing JWT.
+3. Every successful `POST /api/host/refresh`. That route is cookie-authenticated.
+   If `auth0_refresh_token` is set, Auth0 refresh runs first and a failure
+   returns HTTP 401 with no mint. A successful mint rotates `jti`; the previous
+   bearer fails `require_bearer_session`.
+
+The JWT exists so the cookie alone does not authorize Looker or lab calls. It
+is short-lived (`HOST_ACCESS_TOKEN_TTL_SECONDS`) and rotatable. Auth0 tokens
+stay on the server.
+
 ### Layer B (Looker — four tokens)
 
 Human write-up of this contract: [ARCHITECTURE.md](../../ARCHITECTURE.md) sections "Looker cookieless contract" and "Reading the lifetime swimlane".
@@ -68,6 +88,8 @@ Looker returns the TTLs. The lab sets only `session_length` (`LOOKER_EMBED_SESSI
 `session_reference_token` countdown starts at acquire. `generate_tokens` stores the returned remaining `session_reference_token_ttl` and keeps `looker_session_reference_issued_at`. A new reference string, if Looker returns one, replaces the secret and leaves the countdown in place. Reattach (acquire with the stored reference) ignores `session_length` and keeps that issued-at when the new absolute expiry is within 15 seconds of the previous one. A later expiry beyond that starts a new span (`HostSession.note_session_reference_window`). There is no refresh that extends this TTL. A new countdown requires acquire with no stored reference (`end_embed_session` or a dropped/missing reference, then acquire).
 
 `LOOKER_EMBED_SESSION_LENGTH` is `os.getenv` after `load_dotenv(ROOT_DIR / ".env")` in `app/config.py`. A set `.env` value wins over the Python fallback. The swimlane and cards use Looker's `session_reference_token_ttl`, not that integer. Changing `.env` or the fallback requires a process restart; an already acquired session keeps its returned TTL. `/architecture` prints the loaded integer (`views.architecture`).
+
+`session_reference_token_ttl` is Looker's seconds-remaining field. The lab stores it and returns it. It does not substitute `LOOKER_EMBED_SESSION_LENGTH`. A fresh acquire with no stored reference is the call that sends `session_length`. Reattach (acquire with the stored reference) and `generate_tokens` return the countdown, so 775 with `LOOKER_EMBED_SESSION_LENGTH=900` means about 125 seconds have already elapsed on that session. Confirm reattach in the acquire event: `tokens_in` includes `session_reference_token`. A generate response is always remaining time.
 
 `authentication_token` is consumed by iframe navigation to `/login/embed`. `generate_tokens` leaves it unchanged. Its TTL is shorter than the nav/api ask window, so it stays out of the expiring state (`build_observatory_snapshot` and `currentTokenState`).
 
@@ -133,7 +155,7 @@ MUST NOT document “always the original login UA.”
 | Host bootstrap | `POST /api/host/bootstrap` → `bootstrap_host_access_token` | cookie; mint if missing or &lt;30s to expiry |
 | Host refresh | `POST /api/host/refresh` → `refresh_host_access_token` | cookie. If `auth0_refresh_token` is set, `refresh_auth0_tokens` runs first; `Auth0RefreshError` returns HTTP 401 and does not mint. Otherwise `mint_host_access_token`. |
 | Looker acquire | `POST /api/looker/acquire-embed-session` → `looker_client.acquire_embed_session` | `embed_domain=APP_BASE_URL`; create or reattach via stored reference; new auth token |
-| Looker generate | `PUT /api/looker/generate-embed-tokens` → `looker_client.generate_embed_tokens` | identity from HostSession, not body; if Looker returns a replacement `session_reference_token`, the server stores it |
+| Looker generate | `PUT /api/looker/generate-embed-tokens` → `looker_client.generate_embed_tokens` | Requires a valid `host_access_token` bearer and a stored `session_reference_token`. Looker's generate API also receives the last `navigation_token` and `api_token` from `HostSession`. The HTTP body is empty. `authentication_token` is already consumed and is not an input. A replacement `session_reference_token` string, if returned, is stored and does not restart the countdown. |
 | Freeze | `HostSession.freeze_token_refresh` | generate returns 200 + `frozen: true`, no Looker rotate |
 | Dead session | `session_reference_token_ttl == 0` | `LookerSessionDead` → HTTP 409 `code: SESSION_DEAD` |
 

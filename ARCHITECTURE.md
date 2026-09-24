@@ -99,6 +99,18 @@ for another iframe and ignores `session_length`. The same session bar continues.
 A new countdown starts only from an acquire that does not send a live
 reference: End Looker, then acquire again.
 
+`session_reference_token_ttl` in a Looker response is seconds still left on
+that session. It is not a copy of `LOOKER_EMBED_SESSION_LENGTH`. Only a fresh
+acquire (no stored reference) asks Looker for `session_length`. Reattach and
+`generate_tokens` return the countdown. A response of 775 when
+`LOOKER_EMBED_SESSION_LENGTH` is 900 means about 125 seconds have already
+elapsed on that session. The lab does not rewrite the number.
+
+The sequence at
+[`docs/sequence-looker-token-lifecycle.mmd`](docs/sequence-looker-token-lifecycle.mmd)
+draws acquire, the one-use authentication token, the first token reply, and
+each `generate_tokens` renewal.
+
 The number in `app/config.py` is a fallback. If `.env` sets
 `LOOKER_EMBED_SESSION_LENGTH`, that value is what acquire sends. Changing the
 fallback while `.env` still says 720 leaves a 12-minute bar. After you change
@@ -216,7 +228,8 @@ The two lab tabs implement the same boundary differently:
 
 The diagram at [`docs/sequence-happy-path.mmd`](docs/sequence-happy-path.mmd),
 also rendered at `/sequence`, shows the raw postMessage happy path. It is not a
-complete SDK trace or failure matrix.
+complete SDK trace or failure matrix. Token renewal for the four Looker tokens
+is [`docs/sequence-looker-token-lifecycle.mmd`](docs/sequence-looker-token-lifecycle.mmd).
 
 ## Reading the lifetime swimlane
 

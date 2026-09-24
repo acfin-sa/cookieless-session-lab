@@ -27,6 +27,61 @@ async function readErrorDetail(response) {
   }
 }
 
+let lastPrintedLookerTokenFingerprint = "";
+let lastLookerBrowserTokens = null;
+
+export function rememberLookerBrowserTokens(tokens) {
+  if (!tokens || typeof tokens !== "object") {
+    return;
+  }
+  if (!tokens.navigation_token && !tokens.api_token) {
+    return;
+  }
+  const fingerprint = `${tokens.navigation_token ?? ""}|${tokens.api_token ?? ""}`;
+  if (fingerprint === lastPrintedLookerTokenFingerprint) {
+    return;
+  }
+  lastPrintedLookerTokenFingerprint = fingerprint;
+  lastLookerBrowserTokens = {
+    navigation_token: tokens.navigation_token,
+    api_token: tokens.api_token,
+    navigation_token_ttl: tokens.navigation_token_ttl,
+    api_token_ttl: tokens.api_token_ttl,
+  };
+  console.info("[lab] navigation_token", lastLookerBrowserTokens.navigation_token);
+  console.info("[lab] api_token", lastLookerBrowserTokens.api_token);
+  if (
+    lastLookerBrowserTokens.navigation_token_ttl != null ||
+    lastLookerBrowserTokens.api_token_ttl != null
+  ) {
+    console.info("[lab] navigation_token_ttl", lastLookerBrowserTokens.navigation_token_ttl);
+    console.info("[lab] api_token_ttl", lastLookerBrowserTokens.api_token_ttl);
+  }
+}
+
+/** Re-print the last nav/api pair held in memory (DevTools console). */
+export function printLookerIframeTokens() {
+  if (!lastLookerBrowserTokens) {
+    console.warn(
+      "[lab] no navigation_token/api_token yet — log in, open /lab, and complete Looker acquire (Looker env must be set)."
+    );
+    return null;
+  }
+  console.info("[lab] navigation_token", lastLookerBrowserTokens.navigation_token);
+  console.info("[lab] api_token", lastLookerBrowserTokens.api_token);
+  return { ...lastLookerBrowserTokens };
+}
+
+function parseJsonResponseBody(response) {
+  if (response.status === 204) {
+    return null;
+  }
+  return response.json().then((payload) => {
+    rememberLookerBrowserTokens(payload);
+    return payload;
+  });
+}
+
 export async function fetchWithHostAccessToken(path, options = {}) {
   const headers = {
     ...(options.body ? { "content-type": "application/json" } : {}),
@@ -53,20 +108,14 @@ export async function fetchWithHostAccessToken(path, options = {}) {
       error.status = retry.status;
       throw error;
     }
-    if (retry.status === 204) {
-      return null;
-    }
-    return retry.json();
+    return parseJsonResponseBody(retry);
   }
   if (!response.ok) {
     const error = new Error(await readErrorDetail(response));
     error.status = response.status;
     throw error;
   }
-  if (response.status === 204) {
-    return null;
-  }
-  return response.json();
+  return parseJsonResponseBody(response);
 }
 
 function storeHostAccessToken(payload) {
@@ -77,12 +126,12 @@ function storeHostAccessToken(payload) {
   scheduleHostRefresh();
 }
 
-function scheduleHostRefresh() {
+function scheduleHostRefresh() { // refreshes host_access_token
   if (refreshTimer) {
     clearTimeout(refreshTimer);
   }
   const remainingMs = (hostAccessExpiresAt || Date.now()) - Date.now();
-  const wait = Math.max(5_000, remainingMs - 60_000);
+  const wait = Math.max(5_000, remainingMs - 45_000);
   refreshTimer = setTimeout(() => {
     refreshHostAccessToken().catch((error) => {
       console.warn("[lab] host refresh failed", error.message);
