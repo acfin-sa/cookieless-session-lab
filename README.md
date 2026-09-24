@@ -83,16 +83,15 @@ Secret merely to run this lab; doing so invalidates live sessions.
 | `http://localhost:3000` | Sign in |
 | `http://localhost:3000/lab` | Interactive session observatory |
 | `http://localhost:3000/architecture` | Rendered architecture guide |
-| `http://localhost:3000/sequence` | Happy-path raw `postMessage` sequence |
+| `http://localhost:3000/sequence` | Embed SDK happy-path sequence |
 | `http://localhost:3000/health` | Local smoke ping (`APP_BASE_URL`, cookie Secure flag) |
 
-The sequence is intentionally a happy path for the raw `postMessage` protocol.
-It is not the complete Embed SDK flow or a failure matrix.
+The sequence is the Embed SDK happy path. It is not a failure matrix.
 
 ## Ten-minute demo
 
 1. Keep `LOOKER_EMBED_SESSION_LENGTH=720` in `.env` for a viewable 12-minute session. That file overrides the fallback in `app/config.py`. Restart after changing it, then end Looker and acquire again; an existing session keeps the TTL Looker already returned. Navigation and API tokens are about 10 minutes unless this session is shorter, which caps them. Moving the browser clock does not expire any of these tokens.
-2. Log in and compare the **Embed SDK** and **Raw postMessage** tabs.
+2. Log in. The Embed SDK dashboard loads beside the observatory.
 3. On the lifetime swimlane, read the four Looker bars: authentication about 30 seconds, navigation and API about 10 minutes, session reference the full 12 minutes. An amber line in the hatched last 60 seconds is `generate_tokens`. The host JWT renews on its own lane. If the Embed SDK tab instead dies near 8:38 on the page timer with no amber line, that is the Embed SDK generate gate in [ARCHITECTURE.md](ARCHITECTURE.md).
 4. Turn on **Freeze token refresh** and let the short-lived Looker tokens age.
 5. Turn freeze off, reacquire if needed, then enable **Force User-Agent

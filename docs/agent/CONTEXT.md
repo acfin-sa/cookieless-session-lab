@@ -31,7 +31,7 @@ Auth0 proves the human
 | Browser → host bearer routes | signing key `APP_KEY_SECRET` | JWT | HS256; `typ=host_access`; HostSession from JWT claim `hsid`; not revoked; current `jti`. Required on `/api/looker/*` and `/api/lab/*` |
 | Host → Auth0 | client secret + stored refresh | browser | Auth0 tokens never returned to JS |
 | Host → Looker API | API credentials + `session_reference_token` | iframe / JS | Host chooses session; JSON stripped of reference; acquire sends `embed_domain=APP_BASE_URL` |
-| Browser → iframe | origin + `event.source` (raw tab) | Looker frame | Deliver nav/api only; never session reference |
+| Embed SDK → iframe | `@looker/embed-sdk` `initCookieless` | Looker frame | Deliver nav/api only; never session reference |
 
 ## Token inventory
 
@@ -95,7 +95,7 @@ Looker returns the TTLs. The lab sets only `session_length` (`LOOKER_EMBED_SESSI
 
 ### When the iframe asks
 
-1. First `session:tokens:request` after load reuses acquire's navigation and API tokens. Embed SDK: `initCookieless`. Raw tab: `postmessage-tab.js`.
+1. First `session:tokens:request` after load reuses acquire's navigation and API tokens. The Embed SDK does this inside `initCookieless`.
 2. Looker sends `session:tokens:request` again when either sibling TTL is inside the last 60 seconds.
 3. That ask calls `generate_tokens`, which rotates both siblings.
 4. `EXPIRING_WINDOW_SECONDS` in `app/services/observatory.py` is that window. Snapshot field `looker_refresh_window_seconds` feeds the swimlane hatch, the expiring state, and the lab overlay. Do not fork a second constant in JS.
@@ -171,14 +171,13 @@ Acquire is not generate. Auth0 code exchange is not host refresh. Generate does 
 - `fetchWithHostAccessToken`: on HTTP 401 (except bootstrap/refresh themselves), call `refreshHostAccessToken` once and retry the original request with the new bearer. A second 401 throws.
 - `refreshHostAccessToken` coalesces with `refreshInFlight`. It does not send the bearer; the cookie selects the HostSession.
 
-Embed acquire and generate go through `fetchWithHostAccessToken`. If the chained refresh has failed and the 401 retry also fails, `generateTokens` / the postMessage generate path throw while nav/api `exp` and `session_reference_token_ttl` can still be in the future. The iframe then emits `session:expired` or shows its interrupted state. That is not evidence that a Looker token expired. `authentication_token` is already consumed at `/login/embed` and is not an input to generate.
+Embed acquire and generate go through `fetchWithHostAccessToken`. If the chained refresh has failed and the 401 retry also fails, `generateTokens` throws while nav/api `exp` and `session_reference_token_ttl` can still be in the future. The iframe then emits `session:expired` or shows its interrupted state. That is not evidence that a Looker token expired. `authentication_token` is already consumed at `/login/embed` and is not an input to generate.
 
 Expiry of the host JWT alone does not change the page. Effects below require the JWT to be expired **and** `POST /api/host/refresh` to fail:
 
 | Surface | Behavior |
 | --- | --- |
-| Embed SDK | `generateTokens` throws on the next `session:tokens:request` (either sibling inside `EXPIRING_WINDOW_SECONDS`). Looker shows its interrupted state. The iframe keeps working until that ask. |
-| Raw postMessage | `postmessage-tab.js` posts `session:tokens` with `session_reference_token_ttl: 0` so the iframe expires. |
+| Embed SDK | `generateTokens` throws on the next `session:tokens:request` (either sibling inside `EXPIRING_WINDOW_SECONDS`). Looker shows its interrupted state. The iframe keeps working until that ask. The SDK then sends an empty `session:tokens`. |
 | Observatory | `poll` catches and `console.warn`s. Cards, gantt, and event log stay on the last snapshot. The 1s `renderCards` / `renderGantt` interval still moves those old clocks. |
 | Controls | Freeze, UA mismatch, drop reference, and End Looker call `showLabError`. Toggles revert. |
 | Browser-originated events | `reportEvent` `console.warn`s; the row is not stored. |
@@ -197,10 +196,9 @@ Expiry of the host JWT alone does not change the page. Effects below require the
 
 Iframe `session:expired` / `session:status` with `expired=true` (`POST /api/lab/events`) calls `HostSession.mark_iframe_expired`. It MUST NOT revoke `session_reference_token`, smash nav/api `expires_at`, or un-consume `authentication_token`.
 
-The observatory therefore keeps separate nav/api expiry clocks, separate
-session-level state for each SDK/raw iframe, and the session reference alive
-until Looker reports zero TTL, the host ends Layer B, or the lab drops its
-local reference.
+The observatory therefore keeps separate nav/api expiry clocks, Embed SDK iframe
+session state, and the session reference alive until Looker reports zero TTL,
+the host ends Layer B, or the lab drops its local reference.
 
 ## Logout
 
@@ -208,9 +206,9 @@ local reference.
 
 This is **this-browser only**. Logout-everywhere (revoke all HostSessions for `sub`) is **not implemented**.
 
-## Embed clients
+## Embed client
 
-Same host contract, two browsers of it. Human write-up: [ARCHITECTURE.md](../../ARCHITECTURE.md) sections "When Looker asks for new iframe tokens" and "The Embed SDK generate gate".
+The lab has one Looker iframe client: `@looker/embed-sdk` via `initCookieless` in `embed-sdk-tab.js`. Human write-up: [ARCHITECTURE.md](../../ARCHITECTURE.md) sections "When Looker asks for new iframe tokens" and "The Embed SDK generate gate".
 
 ### Autonomous vs host-written
 
@@ -219,7 +217,6 @@ Same host contract, two browsers of it. Human write-up: [ARCHITECTURE.md](../../
 | Looker iframe | `session:tokens:request` after load, and again when either nav or api TTL is inside its last 60s. Renders "session interrupted" when the reply is empty, late, or the stated TTL outlives the JWT. | Nothing. Do not poll Looker for the ask. |
 | Looker API | Returns TTLs. `generate_tokens` does not error on nav/api expiry. `session_reference_token_ttl == 0` means the session is dead and is not an HTTP error from Looker. | `acquire_embed_cookieless_session` and `generate_tokens_for_cookieless_session`, with the current request User-Agent. Store `session_reference_token` server-side. |
 | `@looker/embed-sdk` `initCookieless` | Delivers `session:tokens` into the iframe. First `session:tokens:request` reuses the acquire callback result. Later, calls the generate callback only when `Date.now() > cookielessSession.generateTokensTime`. | `acquireSession` and `generateTokens` callbacks. The SDK never calls Looker's generate API itself. |
-| Raw postMessage tab | None of the token replies. | Every `session:tokens:request`: first reply is the acquire payload; every later reply is generate. Validate `event.source` and the Looker origin. |
 
 ### Embed SDK generate gate
 
@@ -242,8 +239,6 @@ Setting `generateTokensTime` to the past and waiting for the next ask does not h
 - `generateTokens` calls `PUT /api/looker/generate-embed-tokens`. Failure is `reportEvent` with `ok: false`. The SDK then sends an empty `session:tokens`, and Looker shows interrupted.
 - `app/routes/lab.py` `record_client_event` records refresh marker `embed session interrupted` on that failure and on `session:expired` / expired `session:status`. The swimlane draws it in red on the Looker lane.
 
-`app/static/js/src/postmessage-tab.js` does not use the SDK cache. The first request for an iframe window reuses acquire tokens. Every later request calls generate. A generate failure posts `session_reference_token_ttl: 0`, which expires the iframe even when the real session TTL is nonzero.
-
 Do not answer a later ask with the acquire TTL. Either call generate and return Looker's new TTLs, or send the remaining seconds of the tokens you still hold.
 
-`docs/sequence-happy-path.mmd` is the raw postMessage happy path only.
+`docs/sequence-happy-path.mmd` is the Embed SDK happy path. Token renewal is `docs/sequence-looker-token-lifecycle.mmd`.

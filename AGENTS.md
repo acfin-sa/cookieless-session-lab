@@ -44,7 +44,7 @@ checks in the change playbook.
 
 - MUST preserve server-only Auth0 tokens and Looker `session_reference_token`.
 - MUST keep Layer A authorization in front of Layer B routes.
-- MUST treat SDK and raw postMessage tabs as two clients of the same host contract.
+- MUST keep Looker embed traffic on the Embed SDK (`initCookieless` acquire and generate callbacks).
 - MUST NOT commit `.env`, generated secrets, or real token values.
 - MUST NOT infer production durability or logout-everywhere from the current
   in-memory store.

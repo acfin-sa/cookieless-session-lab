@@ -50,8 +50,7 @@ async def record_client_event(request: Request):
     if method in IFRAME_SESSION_EVENT_METHODS and (not ok or expired):
         # Session-level “I can’t keep working.” Not “nav died” or “api died.”
         # Do not smash each JWT’s exp — cards follow their own clocks.
-        # Ignore expiry for an iframe that was never started (raw postMessage
-        # stays unborn until that tab is opened).
+        # Ignore expiry until the Embed SDK iframe has started.
         session.mark_iframe_expired(embed_client)
     elif method == "session:status" and ok and not expired:
         session.mark_iframe_alive(embed_client)

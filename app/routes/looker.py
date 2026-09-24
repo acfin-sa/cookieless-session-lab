@@ -119,7 +119,7 @@ async def acquire_embed_session(request: Request):
     # TOKEN: authentication_token, navigation_token, api_token (to browser)
     #        session_reference_token (server only — stripped before this response)
     # CREATED BY: Looker POST /embed/cookieless_session/acquire
-    # CONSUMED BY: iframe login URL (authentication_token once); generate_tokens; postMessage session:tokens
+    # CONSUMED BY: iframe login URL (authentication_token once); generate_tokens; Embed SDK session:tokens
     # LIVES AT: JSON to browser memory except session_reference_token
     # TTL: auth ~30s; nav/api ~10 min; reference = remaining Looker session
     # WHY: Layer B is only reachable if Layer A bearer is valid. Optional stored
@@ -158,7 +158,7 @@ async def acquire_embed_session(request: Request):
 async def generate_embed_tokens(request: Request):
     # TOKEN: navigation_token, api_token
     # CREATED BY: Looker PUT /embed/cookieless_session/generate_tokens
-    # CONSUMED BY: postMessage session:tokens
+    # CONSUMED BY: Embed SDK session:tokens
     # LIVES AT: JSON to browser, then iframe. session_reference_token is loaded from HostSession, not from the body.
     # TTL: ~10 minutes. Looker asks inside the last 60 seconds.
     # WHY: the iframe is an untrusted peer. It may ask for tokens; it may not mint them

@@ -40,7 +40,7 @@ Auth0 refresh, access, and ID tokens stay on the server, as does
 ## Why are there two short-lived Looker tokens?
 
 `navigation_token` authorizes movement inside the embed (dashboards, looks,
-routes). The raw tab also puts it on the login URL as `embed_navigation_token`.
+routes). The Embed SDK delivers it to the iframe.
 
 `api_token` authorizes Looker API work the iframe performs (queries and data).
 It lives in the iframe, delivered by `session:tokens`.
@@ -75,11 +75,11 @@ loads, and again when either navigation or API token is inside its last 60
 seconds. It also shows "session interrupted" if the answer is missing or
 claims a longer TTL than the JWT still has.
 
-The host writes the answer. The first answer returns the tokens from acquire.
-Every later answer must call `generate_tokens` and return the new navigation
-and API tokens with the seconds they actually have left. The Embed SDK will
-not call Looker's generate API unless your callback does. The raw postMessage
-tab is the same contract without the SDK.
+The host writes the answer through the Embed SDK callbacks. The first answer
+returns the tokens from acquire. Every later answer must call `generate_tokens`
+and return the new navigation and API tokens with the seconds they actually
+have left. The Embed SDK will not call Looker's generate API unless your
+callback does.
 
 Do not echo the original 10-minute TTL on a later ask. The Embed SDK will
 skip generate when Looker's ask arrives on its gate, described next.
@@ -191,8 +191,8 @@ Expiry alone does not tear down `/lab`. The iframe keeps the navigation and
 API tokens it already holds. The next bearer call gets HTTP 401.
 `fetchWithHostAccessToken` refreshes once and retries. If that refresh fails,
 the next `generate_tokens` fails while Looker TTLs can still be in the future.
-The Embed SDK then shows session interrupted. The raw tab posts
-`session_reference_token_ttl: 0` so the iframe expires. The observatory stays
+The Embed SDK then shows session interrupted and sends an empty `session:tokens`.
+The observatory stays
 on the last snapshot. Freeze, User-Agent mismatch, Drop session reference, and
 End Looker show an error banner. The page does not send you back to login.
 
@@ -241,7 +241,7 @@ There is no universal bit. Check the layer that matters:
 ## What should become modules in a real application?
 
 Separate Auth0 identity, the host session repository, host-token minting,
-Looker acquire/generate/end, the SDK or postMessage browser adapter, and
+Looker acquire/generate/end, the Embed SDK adapter, and
 redacted observability.
 
 Replace the lab's in-memory store with shared durable storage and add a user

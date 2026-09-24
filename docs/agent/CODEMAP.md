@@ -24,12 +24,11 @@ Invariants: [INVARIANTS.md](INVARIANTS.md).
 | `app/services/observatory.py` | `build_observatory_snapshot`, `load_method_map` |
 | `app/services/events.py` | `log_event` (redacts summaries to 500 chars) |
 | `app/static/js/src/host-client.js` | Memory host JWT; `scheduleHostRefresh` (one-shot, reschedule on success); `fetchWithHostAccessToken` (401 → one refresh retry); bootstrap/refresh |
-| `app/static/js/src/embed-sdk-tab.js` | Embed SDK tab |
-| `app/static/js/src/postmessage-tab.js` | Raw postMessage tab |
-| `app/static/js/src/lab.js` | Tab switch, controls, overlays |
+| `app/static/js/src/embed-sdk-tab.js` | Embed SDK iframe (`initCookieless`) |
+| `app/static/js/src/lab.js` | Controls, overlays, starts the Embed SDK |
 | `app/static/js/src/observatory.js` | Poll `/api/lab/snapshot`; `#btn-copy-event-log` copies the snapshot event list |
 | `docs/token-method-map.json` | Method catalog + token `badge` (Auth0 / Host / Looker) for constellation |
-| `docs/sequence-happy-path.mmd` | Happy-path postMessage sequence (`/sequence`) |
+| `docs/sequence-happy-path.mmd` | Embed SDK happy path (`/sequence`) |
 | `docs/sequence-looker-token-lifecycle.mmd` | Four Looker tokens: acquire, one-use authentication, first `session:tokens`, `generate_tokens` renewal, TTL 0, reattach |
 | `scripts/dev.mjs` | venv check, esbuild, uvicorn `--reload` localhost:3000 |
 | `scripts/local.sh` | uvicorn only (not `npm run dev`) |
@@ -62,7 +61,7 @@ Acquire / generate / end implementation: `app/routes/looker.py` + `app/services/
 
 `HostSession` keyed by `host_session_id`. `SessionStore._sessions_by_id`. Singleton `session_store`. Methods: `save`, `get`, `delete`. No `sub` index.
 
-Relevant fields: Auth0 tokens + claims; host JWT + `jti`; Looker four tokens + TTLs; `looker_token_spans` (issued/expires/closed for those four ids, no secrets — swimlane history); flags `freeze_token_refresh`, `force_user_agent_mismatch`, `session_reference_dropped`, `looker_session_revoked`, `host_session_revoked`; per-iframe SDK/postmessage started/expired; `user_agent` (login); `events`; `refresh_markers`.
+Relevant fields: Auth0 tokens + claims; host JWT + `jti`; Looker four tokens + TTLs; `looker_token_spans` (issued/expires/closed for those four ids, no secrets — swimlane history); flags `freeze_token_refresh`, `force_user_agent_mismatch`, `session_reference_dropped`, `looker_session_revoked`, `host_session_revoked`; Embed SDK iframe started/expired; `user_agent` (login); `events`; `refresh_markers`.
 
 ## Config knobs
 
@@ -80,13 +79,10 @@ Relevant fields: Auth0 tokens + claims; host JWT + `jti`; Looker four tokens + T
 
 Auth0 token TTLs are tenant settings, not lab env.
 
-## JS tabs
+## Embed SDK
 
-| Tab | Module | Start | Host calls |
-| --- | --- | --- | --- |
-| Embed SDK | `embed-sdk-tab.js` | `startEmbedSdkTab` | acquire + generate callbacks. `armIframeTokenRotation` pins `generateTokensTime` to 150s before nav/api expiry during acquire and rotates there. `syncCookielessRemainingTtls` rewrites SDK-cached TTLs to remaining seconds and re-pins that gate. |
-| Raw postMessage | `postmessage-tab.js` | `startPostMessageTab` | acquire; first `session:tokens` reuses acquire; later generate |
+`embed-sdk-tab.js` `startEmbedSdkTab` is the only Looker iframe. Acquire and generate are `initCookieless` callbacks. `armIframeTokenRotation` pins `generateTokensTime` to 150s before nav/api expiry during acquire and rotates there. `syncCookielessRemainingTtls` rewrites SDK-cached TTLs to remaining seconds and re-pins that gate.
 
 Swimlane: `renderGantt` in `app/static/js/src/observatory.js`, fed by `looker_token_spans` and `looker_refresh_window_seconds` from `build_observatory_snapshot`.
 
-`lab.js` constants: `EMBED_SDK_TAB = "embed-sdk"`, `POSTMESSAGE_TAB = "postmessage"`. Controls: `#toggle-freeze`, `#toggle-user-agent-mismatch`, `#btn-drop-session-reference`, `#btn-end-looker`.
+Controls: `#toggle-freeze`, `#toggle-user-agent-mismatch`, `#btn-drop-session-reference`, `#btn-end-looker`.

@@ -841,7 +841,7 @@ function renderGantt(root, nowMs = Date.now()) {
 
 function isLookerEvent(event) {
   const method = String(event.method || "");
-  if (method.startsWith("postMessage") || method.startsWith("iframe navigation")) {
+  if (method.startsWith("iframe navigation")) {
     return false;
   }
   const tokenIds = [...(event.tokens_in || []), ...(event.tokens_out || [])];
@@ -948,14 +948,10 @@ function renderEvents(root) {
 
 const CATALOG_COLUMN_COUNT = 6;
 
-// Looker Admin acquire/generate/end are host-only APIs both embed tabs call.
-// Catalog them once under EmbedSDK (the default tab); do not duplicate under Raw iFrame.
-// iframe_embed_login is the shared /login/embed navigation — also listed once under EmbedSDK.
 const CATALOG_GROUPS = [
   { id: "auth0", label: "Auth0" },
   { id: "host", label: "Host" },
   { id: "embed-sdk", label: "Embed SDK" },
-  { id: "raw-iframe", label: "Raw iFrame" },
 ];
 
 function catalogGroupId(method) {

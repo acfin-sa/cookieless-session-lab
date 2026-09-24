@@ -1,4 +1,4 @@
-%% Happy-path raw postMessage flow. Not the Embed SDK client and not a failure matrix.
+%% Embed SDK happy path. Not a failure matrix.
 %% flowchart TB: renders in Cursor Mermaid preview and on /sequence.
 flowchart TB
   subgraph layerA["Layer A — host login"]
@@ -19,11 +19,11 @@ flowchart TB
     B1 --> B2 --> B3 --> B4
   end
 
-  subgraph embed["Iframe bootstrap"]
-    C1["Browser GET /login/embed?embed_authentication_token="]
+  subgraph embed["Embed SDK iframe"]
+    C1["initCookieless opens /login/embed with authentication_token"]
     C2["authentication_token consumed single-use ~30s"]
-    C3["Iframe postMessage session:tokens:request"]
-    C4["Browser postMessage session:tokens nav + api from acquire"]
+    C3["Iframe session:tokens:request"]
+    C4["SDK session:tokens with acquire nav + api"]
     C1 --> C2 --> C3 --> C4
   end
 
@@ -32,7 +32,7 @@ flowchart TB
     D2["Browser PUT /api/looker/generate-embed-tokens"]
     D3["Host PUT generate_tokens with session_reference + last nav/api"]
     D4["Looker new nav + api; session_reference TTL counts down"]
-    D5["Browser postMessage session:tokens"]
+    D5["SDK session:tokens with new nav + api"]
     D1 --> D2 --> D3 --> D4 --> D5
     D5 -.->|"repeat while session lives"| D1
   end

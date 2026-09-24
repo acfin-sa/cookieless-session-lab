@@ -212,7 +212,7 @@ function generateTokens(_tokensFromIframe) {
 async function generateTokensOnce() {
   // TOKEN: navigation_token, api_token
   // CREATED BY: PUT /api/looker/generate-embed-tokens (server loads session_reference_token)
-  // CONSUMED BY: Embed SDK postMessage session:tokens into the iframe
+  // CONSUMED BY: Embed SDK session:tokens into the iframe
   // LIVES AT: iframe. The SDK may pass last nav/api here; we ignore them as identity.
   // TTL: ~10 minutes
   // WHY: iframe is an untrusted peer. It may ask; it may not choose the session.
@@ -252,7 +252,7 @@ async function generateTokensOnce() {
 function reportEmbedSessionExpired(method, summary) {
   return reportEvent({
     method,
-    actor: "iframe postMessage",
+    actor: "Looker iframe",
     summary,
     tokens_in: ["iframe_session_sdk"],
     tokens_out: [],
@@ -288,7 +288,7 @@ function mountDashboard(containerSelector) {
       }
       reportEvent({
         method: "session:status",
-        actor: "iframe postMessage",
+        actor: "Looker iframe",
         summary: JSON.stringify({ expired: false, status: event?.status }),
         tokens_in: ["api_token", "navigation_token"],
         tokens_out: [],
@@ -348,6 +348,6 @@ export function stopEmbedSdkTab() {
   stopCookielessTtlTimer();
   document.getElementById("embed-sdk-root").innerHTML = "";
   // Drop the SDK handle so the next startEmbedSdkTab does not keep callbacks
-  // wired to a torn-down iframe after switching to the postMessage tab.
+  // wired to a torn-down iframe.
   embedSdk = null;
 }

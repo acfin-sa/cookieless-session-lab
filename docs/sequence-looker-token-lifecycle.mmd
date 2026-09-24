@@ -19,7 +19,7 @@ flowchart TB
   subgraph firstAsk["3 First session:tokens:request — no generate yet"]
     H1["Iframe session:tokens:request"]
     H2["Host replies with acquire navigation_token + api_token + remaining session TTL"]
-    H3["No session_reference_token in postMessage"]
+    H3["session:tokens has no session_reference_token"]
     G2 --> H1 --> H2 --> H3
   end
 

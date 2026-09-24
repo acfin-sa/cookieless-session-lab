@@ -8,7 +8,7 @@ Lifecycle and trust-boundary detail: [CONTEXT.md](CONTEXT.md). File/route map: [
 
 - MUST keep `session_reference_token` on the server (`HostSession.looker_session_reference_token`).
 - MUST strip `session_reference_token` from JSON in `app/routes/looker.py` before returning acquire/generate payloads.
-- MUST NOT put `session_reference_token` in URLs, `localStorage`, cookies, or `postMessage` bodies.
+- MUST NOT put `session_reference_token` in URLs, `localStorage`, cookies, or `session:tokens` bodies.
 - MUST NOT return Auth0 refresh, access, or ID tokens to the browser.
 - MUST keep `authentication_token` single-use on the embed login URL (`/login/embed`); mark consumed via `POST /api/lab/events` method `iframe navigation to embed login URL`.
 - MUST treat `navigation_token` and `api_token` as sibling JWTs: independent TTL/`exp`; `generate_tokens` rotates both; they are not Layer B identity.
@@ -79,13 +79,12 @@ Lifecycle and trust-boundary detail: [CONTEXT.md](CONTEXT.md). File/route map: [
 - MUST NOT infer a `sub` index; `SessionStore` is keyed only by `host_session_id`.
 - Logout-everywhere (revoke every HostSession + Auth0 refresh + Looker session for `sub`) is a **product rule for a real app**, not this lab.
 
-## Embed clients
+## Embed client
 
-- MUST keep Embed SDK and raw postMessage as two clients of the same host contract.
+- The only Looker iframe client is the Embed SDK (`embed-sdk-tab.js` `initCookieless`).
 - MUST NOT send `session_reference_token` on `session:tokens`.
-- MUST validate raw postMessage `event.source` and Looker origin in `postmessage-tab.js`.
 - Looker sends `session:tokens:request` on its own (load, then either nav or api inside its last 60s). The host does not poll for that ask.
-- MUST implement acquire and generate callbacks. The Embed SDK does not call Looker's generate API. The raw tab must call generate on every ask after the first for that iframe.
+- MUST implement acquire and generate callbacks. The Embed SDK does not call Looker's generate API.
 - MUST NOT answer a later `session:tokens:request` with the original acquire TTLs. The SDK caches those full values and calls `generateTokens` only when `Date.now() > generateTokensTime` (first ask's cached TTL minus 120s). An ask on that gate does not generate. Looker shows session interrupted. `session_reference_token` remains. Send remaining seconds, or generate and push before the gate.
 - This lab's correction is `armIframeTokenRotation` in `embed-sdk-tab.js`. On acquire it sets `generateTokensTime` to 150s before the returned nav/api TTL (`ROTATION_LEAD_SECONDS`), before the first `session:tokens:request` can set that gate to `ttl - 120`. It rotates and pushes `session:tokens` at that lead. `syncCookielessRemainingTtls` keeps the cached TTLs equal to seconds remaining and re-pins the gate after EmbedClientEx rewrites it to `ttl - 120`. Setting the gate to the past only when the ask arrives still fails the `>` check.
 - A failed generate or iframe `session:expired` MUST be visible. `record_client_event` writes refresh marker `embed session interrupted`.

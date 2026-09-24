@@ -51,7 +51,7 @@ the teaching became wrong. Do not re-copy the full inventory into those files.
 - Navigation and API TTLs as Looker response fields. Do not add request fields for them. A shorter `session_length` is the cap.
 - The split between Looker's autonomous `session:tokens:request` and the host-written generate callback. Do not echo acquire TTLs on a later ask. The SDK generates only when `Date.now() > generateTokensTime`. On the first ask it sets that gate to the cached TTL minus 120s, and Looker's ask lands on that instant, so the iframe dies near page time 8:38 while the session reference remains. Keep `armIframeTokenRotation`: pin the gate to 150s before nav/api expiry during acquire, before that first ask, and re-pin after the SDK rewrites it.
 - `looker_token_spans` and a swimlane that draws those returned windows. Do not clip Looker bars to now+60s.
-- Two embed tabs as separate clients.
+- One Looker iframe client: the Embed SDK. Do not add a second raw postMessage tab.
 - In-memory store (do not pretend durability or logout-everywhere).
 - `HOST_ACCESS_TOKEN_TTL_SECONDS` remaining a Python constant (not silently moved to `.env` without docs + config update).
 
@@ -91,13 +91,13 @@ npm run build:js
 Manual `/lab` checks:
 
 1. Login → `/lab`; constellation shows Layer A; acquire fills Layer B without `session_reference_token` in network JSON.
-2. Embed SDK tab and Raw postMessage tab both load the dashboard.
+2. The Embed SDK dashboard loads.
 3. Freeze on → generate 200 `frozen: true`; nav/api clocks continue.
 4. UA mismatch on → next generate Looker 400 in event log; acquire still uses request UA.
 5. Drop session_reference → later generate 409 `SESSION_DEAD`.
 6. End Looker → Layer A remains; Layer B cleared.
 7. Logout → this cookie/session gone; do not expect other browsers’ HostSessions gone.
-8. `/sequence` still matches `docs/sequence-happy-path.mmd` (happy-path postMessage).
+8. `/sequence` still matches `docs/sequence-happy-path.mmd` (Embed SDK happy path).
 9. If token-moving methods changed, `/lab` catalog matches `docs/token-method-map.json`.
 10. If routes, tokens, or token-moving methods changed: token-method-map, INVARIANTS, CODEMAP, and CONTEXT match the code. Human docs were not used as a second full inventory.
 11. Swimlane: `authentication_token` is its returned single-use window (~30s) with a tick at `/login/embed`; each `navigation_token` and `api_token` generation keeps its returned window and a hatch on the last 60s; `session_reference_token` stays one bar from acquire through `generate_tokens`.

@@ -78,7 +78,7 @@ def compute_token_lifecycle_state(
 
     ``revoked`` = true session teardown (End Looker, ttl==0, logout, drop).
     ``expired`` = this JWT's own clock elapsed.
-    iframe ``session:expired`` is not a per-token flag — see ``iframe_client_snapshot``.
+    iframe ``session:expired`` is not a per-token flag. It is recorded on the Embed SDK iframe.
     """
     if consumed:
         return "consumed"
@@ -119,105 +119,6 @@ def _layer_b_token_flags(session: HostSession, token_id: str) -> tuple[bool, boo
 
 def _host_session_envelope_end(session: HostSession) -> datetime:
     return session.created_at + timedelta(seconds=HOST_SESSION_COOKIE_MAX_AGE)
-
-
-def _iframe_planned_expires_at(session: HostSession) -> datetime | None:
-    """Alive iframe bar end: a planned clock, never snapshot `now`.
-
-    generate_tokens is what keeps the iframe working past the current nav/api
-    JWTs. Freeze skips Looker rotate; User-Agent mismatch makes the next
-    generate fail. Either way the usable envelope is the current nav/api exp.
-    Otherwise the ceiling is Layer B identity (session_reference_token TTL).
-    """
-    refresh_blocked = session.freeze_token_refresh or session.force_user_agent_mismatch
-    if refresh_blocked:
-        jwt_ends = [
-            moment
-            for moment in (
-                session.looker_navigation_expires_at,
-                session.looker_api_token_expires_at,
-            )
-            if moment is not None
-        ]
-        if jwt_ends:
-            return min(jwt_ends)
-    return session.looker_session_reference_expires_at
-
-
-# Embed SDK iframe session is tracked on HostSession for events but omitted from the
-# swimlane and token constellation (the SDK tab is the live embed; no separate row).
-IFRAME_CLIENT_SPECS = (
-    {
-        "id": "iframe_session_postmessage",
-        "name": "Raw postMessage iframe",
-        "started_attr": "looker_postmessage_iframe_started",
-        "started_at_attr": "looker_postmessage_iframe_started_at",
-        "expired_attr": "looker_postmessage_iframe_expired",
-        "expired_at_attr": "looker_postmessage_iframe_expired_at",
-        "unborn_reason": "unborn — Raw postMessage tab has not been opened",
-        "purpose": "Session-level signal for the raw postMessage dashboard iframe. Stays unborn until that tab is opened.",
-    },
-)
-
-
-def iframe_client_snapshot(session: HostSession, _now: datetime, spec: dict[str, str]) -> dict[str, Any]:
-    """Per-iframe Layer B row for the 'I can't keep working' signal.
-
-    This is not navigation_token and not api_token. Those cards keep their own exp.
-    An iframe that was never summoned stays unborn even if another iframe expired.
-    """
-    started = bool(getattr(session, spec["started_attr"]))
-    expired = bool(getattr(session, spec["expired_attr"]))
-    started_at = getattr(session, spec["started_at_attr"])
-    expired_at = getattr(session, spec["expired_at_attr"])
-    planned_expires_at = None
-    if not started:
-        state = "unborn"
-        expires_at = None
-        issued_at = None
-        reason = spec["unborn_reason"]
-    elif expired:
-        state = "expired"
-        issued_at = started_at
-        expires_at = expired_at
-        reason = (
-            "iframe session expired — embed cannot keep working "
-            "(session:expired / expired session:status)."
-        )
-    elif session.looker_session_revoked:
-        state = "revoked"
-        issued_at = started_at
-        expires_at = session.looker_session_revoked_at
-        reason = "Layer B identity ended (ttl==0 or End Looker)."
-    else:
-        state = "alive"
-        issued_at = started_at
-        expires_at = None
-        planned_expires_at = _iframe_planned_expires_at(session)
-        if session.freeze_token_refresh or session.force_user_agent_mismatch:
-            reason = (
-                "iframe has not reported session:expired. "
-                "generate_tokens cannot rotate. "
-                "This row ends when the current JWTs expire."
-            )
-        else:
-            reason = (
-                "iframe has not reported session:expired. "
-                "envelope (session_reference_token TTL)"
-            )
-    return {
-        "id": spec["id"],
-        "name": spec["name"],
-        "layer": "B",
-        "storage": "iframe event (session:expired)",
-        "state": state,
-        "state_reason": reason,
-        "present": state != "unborn",
-        "issued_at": utc_isoformat(issued_at),
-        "expires_at": utc_isoformat(expires_at),
-        "planned_expires_at": utc_isoformat(planned_expires_at),
-        "purpose": spec["purpose"],
-    }
 
 
 def _state_reason(
@@ -385,7 +286,7 @@ def build_observatory_snapshot(session: HostSession) -> dict[str, Any]:
             "looker_session_revoked": session.looker_session_revoked,
             "any_iframe_session_expired": session.any_iframe_session_expired(),
         },
-        "iframe_sessions": [iframe_client_snapshot(session, now, spec) for spec in IFRAME_CLIENT_SPECS],
+        "iframe_sessions": [],
         "tokens": tokens,
         "events": [event.to_public_dict() for event in session.events[-120:]],
         "looker_refresh_window_seconds": EXPIRING_WINDOW_SECONDS,

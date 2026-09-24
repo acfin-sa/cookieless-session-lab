@@ -35,7 +35,7 @@ flowchart LR
     Browser -->|host_session_id + host_access_token| Host
     Host -->|server credentials + session_reference_token| Looker
     Looker -->|browser-safe tokens via host| Browser
-    Browser -->|SDK or postMessage| Iframe
+    Browser -->|Embed SDK| Iframe
 ```
 
 | Layer | Role | Durable record | What the browser holds |
@@ -80,7 +80,8 @@ TTLs Looker returned.
 | `api_token` | about 10 minutes | Iframe | Its own `exp`, then `generate_tokens` replaces it |
 | `session_reference_token` | `session_length` (lab default 720 s) | Server only | TTL 0, End Looker, or logout |
 
-`navigation_token` authorizes movement inside the embed. `api_token` authorizes
+- `navigation_token` authorizes movement inside the embed.
+- `api_token` authorizes
 Looker API calls the iframe makes. They are sibling JWTs. Acquire and generate
 usually mint them together. Each response still carries its own TTL, so the
 clocks can diverge. Neither one is the embed session.
@@ -136,7 +137,7 @@ What the host must do on each ask is not automatic:
 | Step | Who runs it |
 | --- | --- |
 | Notice that nav or api is near expiry, and send `session:tokens:request` | Looker, on its own |
-| First reply: hand back the navigation and API tokens from acquire, with the TTLs Looker just returned | Host code. The Embed SDK does this inside `initCookieless` if you passed an acquire callback. The raw postMessage tab does it explicitly. |
+| First reply: hand back the navigation and API tokens from acquire, with the TTLs Looker just returned | The Embed SDK does this inside `initCookieless` from the acquire callback. |
 | Later reply: call `generate_tokens` and return the new navigation and API tokens, plus the **remaining** `session_reference_token_ttl` | Host code. You write this. Neither Looker nor the SDK calls Looker's generate API for you. |
 | Keep `session_reference_token` on the server and send it only to Looker's generate API | Host code |
 | Show "session interrupted" if the reply is missing, late, or carries a stale TTL | Looker, on its own |
@@ -219,17 +220,14 @@ in this lab.
 The iframe may request tokens with `session:tokens:request`. It may not choose
 the session reference or call Looker's privileged acquire/generate APIs.
 
-The two lab tabs implement the same boundary differently:
-
-- **Embed SDK:** `initCookieless` invokes host callbacks and manages iframe
-  messaging.
-- **Raw postMessage:** the browser validates both `event.source` and the Looker
-  origin, then sends only navigation/API token fields.
+This lab answers that request through the Embed SDK. `initCookieless` invokes
+the host acquire and generate callbacks and delivers `session:tokens` into the
+iframe. The message never includes `session_reference_token`.
 
 The diagram at [`docs/sequence-happy-path.mmd`](docs/sequence-happy-path.mmd),
-also rendered at `/sequence`, shows the raw postMessage happy path. It is not a
-complete SDK trace or failure matrix. Token renewal for the four Looker tokens
-is [`docs/sequence-looker-token-lifecycle.mmd`](docs/sequence-looker-token-lifecycle.mmd).
+also rendered at `/sequence`, shows the Embed SDK happy path. It is not a
+failure matrix. Token renewal for the four Looker tokens is
+[`docs/sequence-looker-token-lifecycle.mmd`](docs/sequence-looker-token-lifecycle.mmd).
 
 ## Reading the lifetime swimlane
 
@@ -317,8 +315,8 @@ Keep these boundaries:
 3. **Host token service:** mint and verify short-lived BFF access tokens.
 4. **Looker bridge:** acquire, generate, and end; explicit server-only response
    filtering.
-5. **Embed client adapter:** SDK or postMessage implementation with strict
-   origin/source validation.
+5. **Embed client:** Embed SDK `initCookieless`, with acquire and generate
+   callbacks that never send `session_reference_token` to the iframe.
 6. **Observability:** metadata and redacted events, never raw credentials.
 
 Replace process memory with a shared server-side store before scaling beyond

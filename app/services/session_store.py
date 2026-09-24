@@ -95,10 +95,6 @@ class HostSession:
     looker_sdk_iframe_started_at: datetime | None = None
     looker_sdk_iframe_expired: bool = False
     looker_sdk_iframe_expired_at: datetime | None = None
-    looker_postmessage_iframe_started: bool = False
-    looker_postmessage_iframe_started_at: datetime | None = None
-    looker_postmessage_iframe_expired: bool = False
-    looker_postmessage_iframe_expired_at: datetime | None = None
     host_session_revoked: bool = False
 
     events: list[LabEvent] = field(default_factory=list)
@@ -224,62 +220,40 @@ class HostSession:
         )
 
     def any_iframe_session_expired(self) -> bool:
-        return self.looker_sdk_iframe_expired or self.looker_postmessage_iframe_expired
+        return self.looker_sdk_iframe_expired
 
     def mark_iframe_started(self, embed_client: str) -> None:
-        now = utc_now()
-        if embed_client == "sdk":
-            self.looker_sdk_iframe_started = True
-            if self.looker_sdk_iframe_started_at is None:
-                self.looker_sdk_iframe_started_at = now
-            self.looker_sdk_iframe_expired = False
-            self.looker_sdk_iframe_expired_at = None
+        if embed_client != "sdk":
             return
-        if embed_client == "postmessage":
-            self.looker_postmessage_iframe_started = True
-            if self.looker_postmessage_iframe_started_at is None:
-                self.looker_postmessage_iframe_started_at = now
-            self.looker_postmessage_iframe_expired = False
-            self.looker_postmessage_iframe_expired_at = None
+        now = utc_now()
+        self.looker_sdk_iframe_started = True
+        if self.looker_sdk_iframe_started_at is None:
+            self.looker_sdk_iframe_started_at = now
+        self.looker_sdk_iframe_expired = False
+        self.looker_sdk_iframe_expired_at = None
 
     def mark_iframe_expired(self, embed_client: str) -> bool:
-        """Apply session:expired only to an iframe that was actually started.
-
-        Returns True if the flag changed. Unborn iframes stay unborn.
-        """
-        now = utc_now()
-        if embed_client == "sdk" and self.looker_sdk_iframe_started:
-            self.looker_sdk_iframe_expired = True
-            if self.looker_sdk_iframe_expired_at is None:
-                self.looker_sdk_iframe_expired_at = now
-            return True
-        if embed_client == "postmessage" and self.looker_postmessage_iframe_started:
-            self.looker_postmessage_iframe_expired = True
-            if self.looker_postmessage_iframe_expired_at is None:
-                self.looker_postmessage_iframe_expired_at = now
-            return True
-        return False
+        """Apply session:expired only after the Embed SDK iframe has started."""
+        if embed_client != "sdk" or not self.looker_sdk_iframe_started:
+            return False
+        self.looker_sdk_iframe_expired = True
+        if self.looker_sdk_iframe_expired_at is None:
+            self.looker_sdk_iframe_expired_at = utc_now()
+        return True
 
     def mark_iframe_alive(self, embed_client: str) -> None:
-        if embed_client == "sdk" and self.looker_sdk_iframe_started:
-            self.looker_sdk_iframe_expired = False
-            self.looker_sdk_iframe_expired_at = None
+        if embed_client != "sdk" or not self.looker_sdk_iframe_started:
             return
-        if embed_client == "postmessage" and self.looker_postmessage_iframe_started:
-            self.looker_postmessage_iframe_expired = False
-            self.looker_postmessage_iframe_expired_at = None
+        self.looker_sdk_iframe_expired = False
+        self.looker_sdk_iframe_expired_at = None
 
     def clear_iframe_expired(self) -> None:
         self.looker_sdk_iframe_expired = False
         self.looker_sdk_iframe_expired_at = None
-        self.looker_postmessage_iframe_expired = False
-        self.looker_postmessage_iframe_expired_at = None
 
     def reset_iframe_clients(self) -> None:
         self.looker_sdk_iframe_started = False
         self.looker_sdk_iframe_started_at = None
-        self.looker_postmessage_iframe_started = False
-        self.looker_postmessage_iframe_started_at = None
         self.clear_iframe_expired()
 
     def append_event(self, event: LabEvent) -> LabEvent:

@@ -136,27 +136,7 @@
       "direction": "Browser → Looker (iframe)",
       "tokens_in": ["authentication_token", "navigation_token"],
       "tokens_out": [],
-      "where_after": "authentication_token is consumed (dead). navigation_token stays on the embed URL as embed_navigation_token."
-    },
-    {
-      "id": "postmessage_tokens_request",
-      "group": "raw-iframe",
-      "kind": "request",
-      "method": "postMessage session:tokens:request",
-      "direction": "iframe → Browser",
-      "tokens_in": [],
-      "tokens_out": [],
-      "where_after": "No tokens travel. This is a request that the host must answer with session:tokens."
-    },
-    {
-      "id": "postmessage_tokens",
-      "group": "raw-iframe",
-      "kind": "deliver",
-      "method": "postMessage session:tokens",
-      "direction": "Browser → iframe",
-      "tokens_in": ["api_token", "navigation_token"],
-      "tokens_out": ["api_token", "navigation_token"],
-      "where_after": "Looker UI in the iframe. navigation_token is in-iframe page/dashboard navigation; api_token is iframe Looker API calls. First reply after login reuses acquire tokens; later replies need generate_tokens. Each JWT keeps its own exp."
+      "where_after": "authentication_token is consumed inside /login/embed. The Embed SDK keeps navigation_token for the iframe."
     },
     {
       "id": "host_generate",
@@ -166,7 +146,7 @@
       "direction": "Browser → Host API",
       "tokens_in": ["host_access_token"],
       "tokens_out": ["navigation_token", "api_token"],
-      "where_after": "JSON to browser, then postMessage into the iframe. Server loads session_reference_token itself — the body is not trusted as a source of session identity."
+      "where_after": "JSON to the browser. The Embed SDK delivers session:tokens into the iframe. Server loads session_reference_token itself — the body is not trusted as a source of session identity."
     },
     {
       "id": "looker_generate",

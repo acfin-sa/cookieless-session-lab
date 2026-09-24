@@ -197,7 +197,7 @@ def acquire_embed_session(session: HostSession, user_agent: str) -> dict[str, An
 def generate_embed_tokens(session: HostSession, user_agent: str) -> dict[str, Any]:
     # TOKEN: navigation_token, api_token (rotate). session_reference_token (input, server-only)
     # CREATED BY: Looker PUT /embed/cookieless_session/generate_tokens
-    # CONSUMED BY: postMessage session:tokens; next generate_tokens call
+    # CONSUMED BY: Embed SDK session:tokens; next generate_tokens call
     # LIVES AT: nav/api → browser then iframe. session_reference_token never leaves the server.
     # TTL: ~10 minutes each, independent exp. navigation_token = in-iframe navigation;
     #      api_token = iframe Looker API calls (queries, data). Minted together, not aliases.

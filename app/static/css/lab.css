@@ -114,7 +114,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .hint, .tiny, .who { color: var(--muted); }
 .tiny { font-size: 0.85rem; }
 
-.btn, button, .tab {
+.btn, button {
   font: inherit;
   cursor: pointer;
   border-radius: 8px;
@@ -125,7 +125,6 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 }
 .btn:focus-visible,
 button:focus-visible,
-.tab:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -231,8 +230,6 @@ a.btn { text-decoration: none; display: inline-block; }
   height: 100%;
   background: #0c1016;
 }
-.tab-bar { display: flex; gap: 0.25rem; padding: 0.6rem 0.8rem 0; }
-.tab.active { background: #1f4d8a; border-color: #3d7bd6; }
 .iframe-pane .hint { padding: 0 0.8rem; }
 .iframe-stage {
   position: relative;

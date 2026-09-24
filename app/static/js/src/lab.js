@@ -5,15 +5,10 @@ import {
 } from "./host-client.js";
 import { bindObservatory, remainingNavigationAndApiSeconds } from "./observatory.js";
 import { startEmbedSdkTab, stopEmbedSdkTab } from "./embed-sdk-tab.js";
-import { startPostMessageTab, stopPostMessageTab } from "./postmessage-tab.js";
 
 const pageConfig = JSON.parse(document.getElementById("page-config").textContent);
 const SPLIT_STORAGE_KEY = "lab-observatory-width";
 const HEIGHT_STORAGE_KEY = "lab-split-height";
-const EMBED_SDK_TAB = "embed-sdk";
-const POSTMESSAGE_TAB = "postmessage";
-let selectedTab = EMBED_SDK_TAB;
-let mountedEmbedTab = null;
 
 function requireElement(id) {
   const element = document.getElementById(id);
@@ -122,54 +117,19 @@ function updateExpiryCountdownOverlays() {
   const soonestRemainingSeconds = [remaining.navigation, remaining.api]
     .filter((value) => value !== null)
     .sort((left, right) => left - right)[0];
-  const overlays = [requireElement("overlay-embed-sdk"), requireElement("overlay-postmessage")];
-  for (const overlay of overlays) {
-    const refreshWindowSeconds = remaining.refreshWindowSeconds ?? 60;
-    if (soonestRemainingSeconds === undefined || soonestRemainingSeconds >= refreshWindowSeconds) {
-      overlay.classList.add("hidden");
-      overlay.textContent = "";
-    } else {
-      overlay.classList.remove("hidden");
-      overlay.textContent = `nav/api expiring in ${soonestRemainingSeconds}s — Looker refresh window`;
-    }
+  const overlay = requireElement("overlay-embed-sdk");
+  const refreshWindowSeconds = remaining.refreshWindowSeconds ?? 60;
+  if (soonestRemainingSeconds === undefined || soonestRemainingSeconds >= refreshWindowSeconds) {
+    overlay.classList.add("hidden");
+    overlay.textContent = "";
+  } else {
+    overlay.classList.remove("hidden");
+    overlay.textContent = `nav/api expiring in ${soonestRemainingSeconds}s — Looker refresh window`;
   }
 }
 
-function selectTab(tab) {
-  selectedTab = tab;
-  document.querySelectorAll(".tab").forEach((button) => {
-    button.classList.toggle("active", button.dataset.tab === tab);
-  });
-  requireElement("stage-embed-sdk").classList.toggle("hidden", tab !== EMBED_SDK_TAB);
-  requireElement("stage-postmessage").classList.toggle("hidden", tab !== POSTMESSAGE_TAB);
-  requireElement("tab-caption").textContent =
-    tab === EMBED_SDK_TAB
-      ? "SDK tab: initCookieless moves tokens for you. Compare with the postMessage tab."
-      : "Raw postMessage tab: you will see session:tokens:request and session:tokens in the log.";
-}
-
-let tabStartGeneration = 0;
-async function startSelectedTab() {
-  const generation = ++tabStartGeneration;
-  const tab = selectedTab;
-  if (tab === mountedEmbedTab) {
-    return;
-  }
-  if (tab === EMBED_SDK_TAB) {
-    stopPostMessageTab();
-    startEmbedSdkTab(pageConfig);
-    if (generation === tabStartGeneration) {
-      mountedEmbedTab = EMBED_SDK_TAB;
-    }
-    return;
-  }
-  stopEmbedSdkTab();
-  await startPostMessageTab(pageConfig);
-  if (generation !== tabStartGeneration) {
-    stopPostMessageTab();
-    return;
-  }
-  mountedEmbedTab = POSTMESSAGE_TAB;
+function startEmbed() {
+  startEmbedSdkTab(pageConfig);
 }
 
 function formatPageElapsed(totalSeconds) {
@@ -206,14 +166,6 @@ function initLabUi() {
     freeze: requireElement("toggle-freeze"),
     userAgentMismatchToggle: requireElement("toggle-user-agent-mismatch"),
   });
-
-  document.querySelectorAll(".tab").forEach((button) => {
-    button.addEventListener("click", async () => {
-      selectTab(button.dataset.tab);
-      await startSelectedTab();
-    });
-  });
-  selectTab(selectedTab);
 
   async function postLabControl(body, revert) {
     try {
@@ -257,9 +209,7 @@ function initLabUi() {
     try {
       await fetchWithHostAccessToken("/api/looker/end-embed-session", { method: "POST" });
       stopEmbedSdkTab();
-      stopPostMessageTab();
-      mountedEmbedTab = null;
-      await startSelectedTab();
+      startEmbed();
       await observatory.poll();
     } catch (error) {
       showLabError(`End Looker session failed: ${error.message}`);
@@ -282,7 +232,7 @@ async function main() {
 
   try {
     initLabUi();
-    await startSelectedTab();
+    startEmbed();
   } catch (error) {
     console.warn("[lab] UI init failed", error.message);
     showLabError(`Lab UI failed to initialize: ${error.message}`);
