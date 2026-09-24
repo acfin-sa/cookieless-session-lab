@@ -168,6 +168,28 @@ async function startSelectedTab() {
   mountedEmbedTab = POSTMESSAGE_TAB;
 }
 
+function formatPageElapsed(totalSeconds) {
+  const total = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function startPageElapsedTimer() {
+  const element = requireElement("page-elapsed");
+  const render = () => {
+    const elapsedSeconds = performance.now() / 1000;
+    element.textContent = formatPageElapsed(elapsedSeconds);
+    element.dateTime = `PT${Math.floor(elapsedSeconds)}S`;
+  };
+  render();
+  setInterval(render, 1000);
+}
+
 function initLabUi() {
   bindWidthSplit();
   bindHeightSplit();
@@ -244,6 +266,7 @@ function initLabUi() {
 }
 
 async function main() {
+  startPageElapsedTimer();
   try {
     await bootstrapHostSession();
   } catch (error) {

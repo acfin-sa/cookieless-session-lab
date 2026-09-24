@@ -14,6 +14,10 @@
             <p class="who">{{ user_name }}{% if user_email %}{% if user_email != user_name %} · {{ user_email }}{% endif %}{% endif %}</p>
         </div>
         <nav>
+            <p class="page-timer" title="Elapsed time since this page loaded.">
+                <span class="page-timer-label">since load</span>
+                <time id="page-elapsed" datetime="PT0S">0:00</time>
+            </p>
             <a class="btn" href="/architecture">Architecture</a>
             <a class="btn" href="/sequence">Sequence</a>
             {% include "logout_form.html" %}
@@ -44,7 +48,7 @@
                     <li><span class="swatch state-expired"></span> expired</li>
                     <li><span class="swatch state-consumed"></span> consumed</li>
                     <li><span class="swatch state-revoked"></span> revoked</li>
-                    <li><span class="swatch state-hatch"></span> <span id="gantt-legend-hatch-text">hatch: last 60s of navigation_token and api_token, when Looker asks</span></li>
+                    <li><span class="swatch state-hatch"></span> <span id="gantt-legend-hatch-text">hatch: last 60s</span></li>
                     <li><span class="swatch state-marker-generate"></span> generate_tokens</li>
                     <li><span class="swatch state-marker-acquire"></span> Looker acquire</li>
                     <li><span class="swatch state-marker-host"></span> host JWT refresh</li>
@@ -103,6 +107,8 @@
         </div>
         </section>
     </div>
+
+    <div id="lab-toast" class="lab-toast hidden" role="status" aria-live="polite"></div>
 
     <script id="page-config" type="application/json">{{ page_config | tojson }}</script>
     <script id="method-map" type="application/json">{{ method_map | tojson }}</script>

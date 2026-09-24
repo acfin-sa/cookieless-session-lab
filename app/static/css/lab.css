@@ -142,6 +142,28 @@ a.btn { text-decoration: none; display: inline-block; }
   border-bottom: 1px solid var(--line);
   align-items: flex-start;
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+}
+.page-timer {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.page-timer-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.page-timer time {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1rem;
+  color: var(--ink);
 }
 .lab-header h1 { margin: 0; font-size: 1.25rem; }
 .lab-header .who { margin: 0.2rem 0 0; }
@@ -413,6 +435,32 @@ a.btn { text-decoration: none; display: inline-block; }
 .copy-log-btn.copied {
   color: var(--alive);
   border-color: var(--alive);
+}
+.lab-toast {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #1a2434;
+  color: var(--ink);
+  font-size: 0.88rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.lab-toast.hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
+  visibility: hidden;
+}
+.lab-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  visibility: visible;
 }
 .mermaid-box {
   background: #f4f1ea;

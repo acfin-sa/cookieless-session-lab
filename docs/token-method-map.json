@@ -6,7 +6,7 @@
       "layer": "A",
       "badge": "Auth0",
       "storage": "server",
-      "purpose": "Server-only. Mints new Auth0 access tokens. Not the browser host_access_token."
+      "purpose": "Mints new Auth0 access tokens."
     },
     {
       "id": "auth0_access",
@@ -14,7 +14,7 @@
       "layer": "A",
       "badge": "Auth0",
       "storage": "server",
-      "purpose": "Server-only Auth0 API token. Not the host JWT in browser memory."
+      "purpose": "Server-only Auth0 API token."
     },
     {
       "id": "host_session_reference",
@@ -30,7 +30,7 @@
       "layer": "A",
       "badge": "Host",
       "storage": "browser memory",
-      "purpose": "Host BFF JWT. Gates /api/looker/* and /api/lab/*. Not Auth0 access and not Looker api_token."
+      "purpose": "JWT stored in browser memory. Gates /api/looker/* and /api/lab/*."
     },
     {
       "id": "session_reference_token",
@@ -38,7 +38,7 @@
       "layer": "B",
       "badge": "Looker",
       "storage": "server",
-      "purpose": "Looker embed session identity for session_length. Server only. generate_tokens returns the remaining TTL and leaves that countdown in place."
+      "purpose": "Provides session_length param for Looker embed session identity."
     },
     {
       "id": "authentication_token",
@@ -46,7 +46,7 @@
       "layer": "B",
       "badge": "Looker",
       "storage": "URL-once",
-      "purpose": "Single-use /login/embed bootstrap. Looker TTL is about 30 seconds. generate_tokens leaves it unchanged."
+      "purpose": "Single-use /login/embed bootstrap. Stored in URL. Default Looker TTL is about 30 seconds."
     },
     {
       "id": "navigation_token",
@@ -54,7 +54,7 @@
       "layer": "B",
       "badge": "Looker",
       "storage": "iframe / URL",
-      "purpose": "In-iframe navigation JWT. Looker TTL is about 10 minutes, on its own exp. Looker asks in the last 60 seconds of this token or of api_token."
+      "purpose": "In-iframe navigation JWT stored in iframe / URL. Looker TTL is about 10 minutes. Looker asks in the last 60 seconds of this token or of api_token."
     },
     {
       "id": "api_token",
@@ -62,7 +62,7 @@
       "layer": "B",
       "badge": "Looker",
       "storage": "iframe",
-      "purpose": "Iframe Looker API JWT. Looker TTL is about 10 minutes, on its own exp. generate_tokens rotates it together with navigation_token."
+      "purpose": "Iframe Looker API JWT, stored in iframe. Looker TTL is about 10 minutes, on its own exp. generate_tokens rotates it together with navigation_token."
     }
   ],
   "methods": [

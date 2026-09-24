@@ -147,17 +147,9 @@ def _iframe_planned_expires_at(session: HostSession) -> datetime | None:
     return session.looker_session_reference_expires_at
 
 
+# Embed SDK iframe session is tracked on HostSession for events but omitted from the
+# swimlane and token constellation (the SDK tab is the live embed; no separate row).
 IFRAME_CLIENT_SPECS = (
-    {
-        "id": "iframe_session_sdk",
-        "name": "Embed SDK iframe",
-        "started_attr": "looker_sdk_iframe_started",
-        "started_at_attr": "looker_sdk_iframe_started_at",
-        "expired_attr": "looker_sdk_iframe_expired",
-        "expired_at_attr": "looker_sdk_iframe_expired_at",
-        "unborn_reason": "unborn — Embed SDK iframe has not connected yet",
-        "purpose": "Session-level signal for the Embed SDK dashboard iframe.",
-    },
     {
         "id": "iframe_session_postmessage",
         "name": "Raw postMessage iframe",

@@ -868,6 +868,26 @@ function formatEventLogText() {
   return blocks.join("\n\n");
 }
 
+let eventLogToastTimer = null;
+
+function showLabToast(message) {
+  const toast = document.getElementById("lab-toast");
+  if (!toast) {
+    return;
+  }
+  toast.textContent = message;
+  toast.classList.remove("hidden");
+  toast.classList.add("visible");
+  if (eventLogToastTimer) {
+    clearTimeout(eventLogToastTimer);
+  }
+  eventLogToastTimer = window.setTimeout(() => {
+    toast.classList.remove("visible");
+    toast.classList.add("hidden");
+    eventLogToastTimer = null;
+  }, 2200);
+}
+
 async function copyEventLogToClipboard(button) {
   const text = formatEventLogText();
   if (!text) {
@@ -889,6 +909,7 @@ async function copyEventLogToClipboard(button) {
   }
   button.classList.add("copied");
   button.title = "Copied";
+  showLabToast("Event log copied to clipboard");
   window.setTimeout(() => {
     button.classList.remove("copied");
     button.title = "Copy event log to clipboard";
